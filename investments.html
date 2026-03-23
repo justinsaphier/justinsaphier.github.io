@@ -246,18 +246,25 @@
   let investments = [];
   let phone = '';
 
-  async function init() {
+  function loadLocal() {
     try {
-      const res = await fetch(`${API}/api/data`);
-      const data = await res.json();
-      investments = data.investments || [];
-      phone = data.phone || '';
-      if (phone) document.getElementById('phoneNumber').value = phone;
-      renderTable();
-      if (investments.length) refreshPrices();
-    } catch (e) {
-      setStatus('priceStatus', 'Cannot connect to backend server. Make sure it is running.', 'error');
-    }
+      investments = JSON.parse(localStorage.getItem('investments') || '[]');
+      phone = localStorage.getItem('phone') || '';
+    } catch { investments = []; phone = ''; }
+  }
+
+  function saveLocal() {
+    localStorage.setItem('investments', JSON.stringify(
+      investments.map(({ ticker, shares, purchasePrice }) => ({ ticker, shares, purchasePrice }))
+    ));
+    localStorage.setItem('phone', phone);
+  }
+
+  function init() {
+    loadLocal();
+    if (phone) document.getElementById('phoneNumber').value = phone;
+    renderTable();
+    if (investments.length) refreshPrices();
   }
 
   function renderTable() {
@@ -337,7 +344,7 @@
       renderTable();
       setStatus('priceStatus', `Last updated: ${new Date().toLocaleTimeString()}`, 'success');
     } catch (e) {
-      setStatus('priceStatus', 'Failed to fetch prices. Is the server running?', 'error');
+      setStatus('priceStatus', 'Could not fetch live prices — start the backend server to enable this.', 'error');
     }
   }
 
@@ -389,36 +396,34 @@
     document.getElementById('shares').value = '';
     document.getElementById('purchasePrice').value = '';
 
-    await persist();
+    persist();
     renderTable();
     setStatus('addStatus', `Added ${ticker}`, 'success');
     refreshPrices();
   }
 
-  async function removeInvestment(index) {
+  function removeInvestment(index) {
     investments.splice(index, 1);
-    await persist();
+    persist();
     renderTable();
     if (investments.length) refreshPrices();
   }
 
-  async function savePhone() {
+  function savePhone() {
     phone = document.getElementById('phoneNumber').value.trim();
     if (!phone) { setStatus('smsStatus', 'Please enter a phone number.', 'error'); return; }
-    await persist();
+    persist();
     setStatus('smsStatus', 'Phone number saved.', 'success');
   }
 
-  async function persist() {
-    try {
-      await fetch(`${API}/api/data`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ investments: investments.map(({ ticker, shares, purchasePrice }) => ({ ticker, shares, purchasePrice })), phone })
-      });
-    } catch (e) {
-      console.error('Failed to save:', e);
-    }
+  function persist() {
+    saveLocal();
+    // Silently sync to backend if available (needed for SMS scheduling)
+    fetch(`${API}/api/data`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ investments: investments.map(({ ticker, shares, purchasePrice }) => ({ ticker, shares, purchasePrice })), phone })
+    }).catch(() => {});
   }
 
   async function sendTestSMS() {
@@ -428,13 +433,13 @@
 
     setStatus('smsStatus', 'Sending SMS...', '');
     try {
-      await persist();
+      persist();
       const res = await fetch(`${API}/api/send-sms`, { method: 'POST' });
       const data = await res.json();
       if (data.ok) setStatus('smsStatus', 'SMS sent! Check your phone.', 'success');
       else setStatus('smsStatus', `Error: ${data.error}`, 'error');
     } catch (e) {
-      setStatus('smsStatus', 'Failed to send. Is the server running?', 'error');
+      setStatus('smsStatus', 'Could not reach the backend server. Make sure it is running to send SMS.', 'error');
     }
   }
 
