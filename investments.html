@@ -327,25 +327,40 @@
     updateSummary();
   }
 
+  async function fetchPrice(ticker) {
+    const proxy = 'https://corsproxy.io/?';
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=2d`;
+    const res = await fetch(proxy + encodeURIComponent(url));
+    const data = await res.json();
+    const meta = data.chart.result[0].meta;
+    const price = meta.regularMarketPrice;
+    const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? price;
+    const dayChangePct = ((price - prevClose) / prevClose) * 100;
+    return { price, dayChangePct };
+  }
+
   async function refreshPrices() {
     if (!investments.length) return;
     setStatus('priceStatus', 'Fetching prices...', '');
-    try {
-      const tickers = investments.map(i => i.ticker).join(',');
-      const res = await fetch(`${API}/api/prices?tickers=${encodeURIComponent(tickers)}`);
-      const prices = await res.json();
-      investments.forEach(inv => {
-        const p = prices[inv.ticker];
-        if (p) {
-          inv.currentPrice = p.price;
-          inv.dayChangePct = p.dayChangePct;
-        }
-      });
-      renderTable();
-      setStatus('priceStatus', `Last updated: ${new Date().toLocaleTimeString()}`, 'success');
-    } catch (e) {
-      setStatus('priceStatus', 'Could not fetch live prices — start the backend server to enable this.', 'error');
-    }
+    let anyFailed = false;
+
+    await Promise.all(investments.map(async (inv) => {
+      try {
+        const { price, dayChangePct } = await fetchPrice(inv.ticker);
+        inv.currentPrice = price;
+        inv.dayChangePct = dayChangePct;
+      } catch (e) {
+        console.error(`Failed to fetch ${inv.ticker}:`, e);
+        anyFailed = true;
+      }
+    }));
+
+    renderTable();
+    setStatus(
+      'priceStatus',
+      anyFailed ? 'Some prices could not be fetched.' : `Last updated: ${new Date().toLocaleTimeString()}`,
+      anyFailed ? 'error' : 'success'
+    );
   }
 
   function updateSummary() {
