@@ -225,7 +225,7 @@
   <div class="card">
     <h2>Daily SMS Alerts</h2>
     <p style="font-size:0.85rem; color:#718096; margin-bottom:14px;">
-      Enter your phone number to receive a daily portfolio summary via text. Sent at 4:30 PM ET on weekdays.
+      Enter your phone number to receive a daily portfolio summary via text. Sent at 8:00 AM ET on weekdays.
     </p>
     <div class="phone-row">
       <div class="form-group">
@@ -328,15 +328,28 @@
   }
 
   async function fetchPrice(ticker) {
-    const proxy = 'https://corsproxy.io/?';
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=2d`;
-    const res = await fetch(proxy + encodeURIComponent(url));
-    const data = await res.json();
-    const meta = data.chart.result[0].meta;
-    const price = meta.regularMarketPrice;
-    const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? price;
-    const dayChangePct = ((price - prevClose) / prevClose) * 100;
-    return { price, dayChangePct };
+    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=2d`;
+    const proxies = [
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`,
+      `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`,
+    ];
+
+    let lastErr;
+    for (const url of proxies) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const meta = data.chart.result[0].meta;
+        const price = meta.regularMarketPrice;
+        const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? price;
+        const dayChangePct = ((price - prevClose) / prevClose) * 100;
+        return { price, dayChangePct };
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw lastErr;
   }
 
   async function refreshPrices() {
