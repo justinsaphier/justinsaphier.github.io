@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Investment Tracker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+
+    .container { max-width: 860px; margin: 0 auto; }
+
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: #fff;
+    }
+    .subtitle { color: #718096; font-size: 0.9rem; margin-bottom: 32px; }
+
+    .card {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #a0aec0;
+      margin-bottom: 16px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+    }
+
+    .stat-box {
+      background: #12151f;
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+    .stat-box .label { font-size: 0.75rem; color: #718096; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-box .value { font-size: 1.5rem; font-weight: 700; }
+    .stat-box .value.positive { color: #48bb78; }
+    .stat-box .value.negative { color: #fc8181; }
+    .stat-box .value.neutral { color: #e2e8f0; }
+
+    .form-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 120px; }
+    .form-group label { font-size: 0.75rem; color: #a0aec0; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    input[type="text"], input[type="number"], input[type="tel"] {
+      background: #12151f;
+      border: 1px solid #2d3148;
+      border-radius: 6px;
+      padding: 10px 12px;
+      color: #e2e8f0;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+      width: 100%;
+    }
+    input:focus { border-color: #667eea; }
+
+    button {
+      padding: 10px 20px;
+      border-radius: 6px;
+      border: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+      white-space: nowrap;
+    }
+    button:active { transform: scale(0.97); }
+    button:hover { opacity: 0.85; }
+
+    .btn-primary { background: #667eea; color: #fff; }
+    .btn-success { background: #48bb78; color: #fff; }
+    .btn-danger  { background: transparent; color: #fc8181; border: 1px solid #fc8181; padding: 6px 12px; font-size: 0.8rem; }
+    .btn-sms { background: #38b2ac; color: #fff; width: 100%; margin-top: 12px; padding: 12px; font-size: 1rem; }
+
+    .phone-row { display: flex; gap: 10px; align-items: flex-end; }
+    .phone-row .form-group { flex: 1; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    thead th {
+      text-align: left;
+      padding: 8px 10px;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #718096;
+      border-bottom: 1px solid #2d3148;
+    }
+    tbody tr { border-bottom: 1px solid #1e2235; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody td { padding: 12px 10px; }
+
+    .ticker { font-weight: 700; color: #90cdf4; font-size: 1rem; }
+    .positive { color: #48bb78; }
+    .negative { color: #fc8181; }
+    .loading { color: #718096; font-style: italic; }
+
+    .empty-state {
+      text-align: center;
+      padding: 32px;
+      color: #718096;
+    }
+
+    .status-bar {
+      font-size: 0.8rem;
+      color: #718096;
+      margin-top: 12px;
+      min-height: 20px;
+    }
+    .status-bar.success { color: #48bb78; }
+    .status-bar.error { color: #fc8181; }
+
+    #refreshBtn {
+      background: transparent;
+      border: 1px solid #2d3148;
+      color: #a0aec0;
+      padding: 6px 14px;
+      font-size: 0.8rem;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .section-header h2 { margin-bottom: 0; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <h1>Investment Tracker</h1>
+  <p class="subtitle">Track your portfolio and get a daily SMS summary.</p>
+
+  <!-- Summary -->
+  <div class="card">
+    <h2>Portfolio Summary</h2>
+    <div class="summary-grid">
+      <div class="stat-box">
+        <div class="label">Total Value</div>
+        <div class="value neutral" id="totalValue">—</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">Total Cost</div>
+        <div class="value neutral" id="totalCost">—</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">Total Gain / Loss</div>
+        <div class="value neutral" id="totalGain">—</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">% Return</div>
+        <div class="value neutral" id="totalPct">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Holdings Table -->
+  <div class="card">
+    <div class="section-header">
+      <h2>Holdings</h2>
+      <button id="refreshBtn" onclick="refreshPrices()">Refresh Prices</button>
+    </div>
+    <div id="holdingsContainer">
+      <div class="empty-state">No holdings yet. Add one below.</div>
+    </div>
+    <div class="status-bar" id="priceStatus"></div>
+  </div>
+
+  <!-- Add Investment -->
+  <div class="card">
+    <h2>Add Investment</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Ticker Symbol</label>
+        <input type="text" id="ticker" placeholder="e.g. AAPL" style="text-transform:uppercase">
+      </div>
+      <div class="form-group">
+        <label>Shares</label>
+        <input type="number" id="shares" placeholder="e.g. 10" min="0" step="any">
+      </div>
+      <div class="form-group">
+        <label>Purchase Price ($)</label>
+        <input type="number" id="purchasePrice" placeholder="e.g. 150.00" min="0" step="any">
+      </div>
+      <button class="btn-primary" onclick="addInvestment()">Add</button>
+    </div>
+    <div class="status-bar" id="addStatus"></div>
+  </div>
+
+  <!-- Phone / SMS -->
+  <div class="card">
+    <h2>Daily SMS Alerts</h2>
+    <p style="font-size:0.85rem; color:#718096; margin-bottom:14px;">
+      Enter your phone number to receive a daily portfolio summary via text. Sent at 4:30 PM ET on weekdays.
+    </p>
+    <div class="phone-row">
+      <div class="form-group">
+        <label>Phone Number</label>
+        <input type="tel" id="phoneNumber" placeholder="+1 (555) 000-0000">
+      </div>
+      <button class="btn-success" onclick="savePhone()">Save</button>
+    </div>
+    <button class="btn-sms" onclick="sendTestSMS()">Send Test SMS Now</button>
+    <div class="status-bar" id="smsStatus"></div>
+  </div>
+
+</div>
+
+<script>
+  const API = 'http://localhost:3000';
+
+  let investments = [];
+  let phone = '';
+
+  async function init() {
+    try {
+      const res = await fetch(`${API}/api/data`);
+      const data = await res.json();
+      investments = data.investments || [];
+      phone = data.phone || '';
+      if (phone) document.getElementById('phoneNumber').value = phone;
+      renderTable();
+      if (investments.length) refreshPrices();
+    } catch (e) {
+      setStatus('priceStatus', 'Cannot connect to backend server. Make sure it is running.', 'error');
+    }
+  }
+
+  function renderTable() {
+    const container = document.getElementById('holdingsContainer');
+    if (!investments.length) {
+      container.innerHTML = '<div class="empty-state">No holdings yet. Add one below.</div>';
+      clearSummary();
+      return;
+    }
+
+    let rows = investments.map((inv, i) => {
+      const cost = inv.shares * inv.purchasePrice;
+      const currentPrice = inv.currentPrice;
+      let gainCell = '<span class="loading">loading...</span>';
+      let pctCell = '';
+      let valueCell = `$${cost.toFixed(2)}`;
+      let dayCell = '';
+
+      if (currentPrice !== undefined) {
+        const value = inv.shares * currentPrice;
+        const gain = value - cost;
+        const pct = (gain / cost) * 100;
+        const cls = gain >= 0 ? 'positive' : 'negative';
+        const sign = gain >= 0 ? '+' : '';
+        gainCell = `<span class="${cls}">${sign}$${gain.toFixed(2)}</span>`;
+        pctCell = `<span class="${cls}">${sign}${pct.toFixed(2)}%</span>`;
+        valueCell = `$${value.toFixed(2)}`;
+
+        if (inv.dayChangePct !== undefined) {
+          const dc = inv.dayChangePct;
+          const dcCls = dc >= 0 ? 'positive' : 'negative';
+          dayCell = `<span class="${dcCls}">${dc >= 0 ? '+' : ''}${dc.toFixed(2)}%</span>`;
+        }
+      }
+
+      return `
+        <tr>
+          <td><span class="ticker">${inv.ticker}</span></td>
+          <td>${inv.shares}</td>
+          <td>$${inv.purchasePrice.toFixed(2)}</td>
+          <td>${currentPrice !== undefined ? '$' + currentPrice.toFixed(2) : '<span class="loading">...</span>'}</td>
+          <td>${valueCell}</td>
+          <td>${gainCell} ${pctCell}</td>
+          <td>${dayCell}</td>
+          <td><button class="btn-danger" onclick="removeInvestment(${i})">Remove</button></td>
+        </tr>`;
+    }).join('');
+
+    container.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Ticker</th><th>Shares</th><th>Avg Cost</th><th>Current</th>
+            <th>Value</th><th>Gain / Loss</th><th>Today</th><th></th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+
+    updateSummary();
+  }
+
+  async function refreshPrices() {
+    if (!investments.length) return;
+    setStatus('priceStatus', 'Fetching prices...', '');
+    try {
+      const tickers = investments.map(i => i.ticker).join(',');
+      const res = await fetch(`${API}/api/prices?tickers=${encodeURIComponent(tickers)}`);
+      const prices = await res.json();
+      investments.forEach(inv => {
+        const p = prices[inv.ticker];
+        if (p) {
+          inv.currentPrice = p.price;
+          inv.dayChangePct = p.dayChangePct;
+        }
+      });
+      renderTable();
+      setStatus('priceStatus', `Last updated: ${new Date().toLocaleTimeString()}`, 'success');
+    } catch (e) {
+      setStatus('priceStatus', 'Failed to fetch prices. Is the server running?', 'error');
+    }
+  }
+
+  function updateSummary() {
+    let totalCost = 0, totalValue = 0;
+    let allPriced = true;
+    investments.forEach(inv => {
+      totalCost += inv.shares * inv.purchasePrice;
+      if (inv.currentPrice !== undefined) totalValue += inv.shares * inv.currentPrice;
+      else allPriced = false;
+    });
+
+    document.getElementById('totalCost').textContent = `$${totalCost.toFixed(2)}`;
+
+    if (allPriced && totalValue > 0) {
+      const gain = totalValue - totalCost;
+      const pct = (gain / totalCost) * 100;
+      const cls = gain >= 0 ? 'positive' : 'negative';
+      const sign = gain >= 0 ? '+' : '';
+
+      setText('totalValue', `$${totalValue.toFixed(2)}`, 'neutral');
+      setText('totalGain', `${sign}$${gain.toFixed(2)}`, cls);
+      setText('totalPct', `${sign}${pct.toFixed(2)}%`, cls);
+    }
+  }
+
+  function clearSummary() {
+    ['totalValue','totalCost','totalGain','totalPct'].forEach(id => setText(id, '—', 'neutral'));
+  }
+
+  function setText(id, text, cls) {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.className = `value ${cls}`;
+  }
+
+  async function addInvestment() {
+    const ticker = document.getElementById('ticker').value.trim().toUpperCase();
+    const shares = parseFloat(document.getElementById('shares').value);
+    const purchasePrice = parseFloat(document.getElementById('purchasePrice').value);
+
+    if (!ticker || isNaN(shares) || isNaN(purchasePrice) || shares <= 0 || purchasePrice <= 0) {
+      setStatus('addStatus', 'Please fill in all fields with valid values.', 'error');
+      return;
+    }
+
+    investments.push({ ticker, shares, purchasePrice });
+    document.getElementById('ticker').value = '';
+    document.getElementById('shares').value = '';
+    document.getElementById('purchasePrice').value = '';
+
+    await persist();
+    renderTable();
+    setStatus('addStatus', `Added ${ticker}`, 'success');
+    refreshPrices();
+  }
+
+  async function removeInvestment(index) {
+    investments.splice(index, 1);
+    await persist();
+    renderTable();
+    if (investments.length) refreshPrices();
+  }
+
+  async function savePhone() {
+    phone = document.getElementById('phoneNumber').value.trim();
+    if (!phone) { setStatus('smsStatus', 'Please enter a phone number.', 'error'); return; }
+    await persist();
+    setStatus('smsStatus', 'Phone number saved.', 'success');
+  }
+
+  async function persist() {
+    try {
+      await fetch(`${API}/api/data`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ investments: investments.map(({ ticker, shares, purchasePrice }) => ({ ticker, shares, purchasePrice })), phone })
+      });
+    } catch (e) {
+      console.error('Failed to save:', e);
+    }
+  }
+
+  async function sendTestSMS() {
+    phone = document.getElementById('phoneNumber').value.trim();
+    if (!phone) { setStatus('smsStatus', 'Enter and save your phone number first.', 'error'); return; }
+    if (!investments.length) { setStatus('smsStatus', 'Add at least one investment first.', 'error'); return; }
+
+    setStatus('smsStatus', 'Sending SMS...', '');
+    try {
+      await persist();
+      const res = await fetch(`${API}/api/send-sms`, { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) setStatus('smsStatus', 'SMS sent! Check your phone.', 'success');
+      else setStatus('smsStatus', `Error: ${data.error}`, 'error');
+    } catch (e) {
+      setStatus('smsStatus', 'Failed to send. Is the server running?', 'error');
+    }
+  }
+
+  function setStatus(id, msg, type) {
+    const el = document.getElementById(id);
+    el.textContent = msg;
+    el.className = `status-bar ${type}`;
+  }
+
+  init();
+</script>
+</body>
+</html>
