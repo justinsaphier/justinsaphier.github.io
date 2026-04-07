@@ -1082,27 +1082,97 @@
     setOcrProgress(0, 'Reading image…');
 
     try {
-      const { data: { text } } = await Tesseract.recognize(file, 'eng', {
+      const { data } = await Tesseract.recognize(file, 'eng', {
         logger: m => {
-          if (m.status === 'recognizing text') {
-            setOcrProgress(Math.round(m.progress * 100), 'Analyzing text…');
-          }
+          if (m.status === 'recognizing text')
+            setOcrProgress(Math.round(m.progress * 100), 'Analyzing image…');
         }
       });
 
       setOcrProgress(100, 'Done! Reviewing results…');
-      console.log('=== RAW OCR TEXT ===\n' + text + '\n=== END OCR ===');
-      ocrDetected = parseHoldingsFromText(text);
+
+      // Try bounding-box table parser first (most accurate for table screenshots)
+      ocrDetected = parseHoldingsByBBox(data.words || []);
+
+      // Fall back to text-line parser if bbox gave nothing
+      if (!ocrDetected.length) ocrDetected = parseHoldingsFromText(data.text || '');
+
+      console.log('OCR detected:', ocrDetected);
 
       setTimeout(() => {
         document.getElementById('ocrProgress').style.display = 'none';
         showOcrReview(ocrDetected);
-      }, 600);
+      }, 500);
     } catch (err) {
+      console.error('OCR error:', err);
       document.getElementById('ocrProgress').style.display = 'none';
       toast('Could not read the image. Try a clearer screenshot.', 'error');
     }
     document.getElementById('holdingsPhoto').value = '';
+  }
+
+  // ── Bounding-box table parser (primary) ──────────────────────────────────────
+  // Groups Tesseract words by their Y position to reconstruct table rows,
+  // then reads Ticker (leftmost word) + Price (first decimal) + Shares (last integer).
+  function parseHoldingsByBBox(words) {
+    if (!words.length) return [];
+
+    // Cluster words into rows by Y-center proximity
+    const ROW_GAP = 12; // pixels — words within this vertical distance are the same row
+    const rows    = [];
+
+    for (const w of words) {
+      const text = w.text.trim();
+      if (!text) continue;
+      const cy = (w.bbox.y0 + w.bbox.y1) / 2;
+
+      let placed = false;
+      for (const row of rows) {
+        if (Math.abs(row.cy - cy) <= ROW_GAP) {
+          row.words.push({ text, x: w.bbox.x0 });
+          // Recalculate mean Y
+          row.cy = (row.cy * (row.words.length - 1) + cy) / row.words.length;
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) rows.push({ cy, words: [{ text, x: w.bbox.x0 }] });
+    }
+
+    // Sort rows top→bottom, words left→right within each row
+    rows.sort((a, b) => a.cy - b.cy);
+    rows.forEach(r => r.words.sort((a, b) => a.x - b.x));
+
+    const results = [];
+    const seen    = new Set();
+
+    for (const row of rows) {
+      const tokens = row.words.map(w => w.text.toUpperCase().replace(/[^A-Z0-9.,]/g, ''));
+
+      // First token that looks like a ticker
+      const ticker = tokens.find(t => /^[A-Z]{1,5}$/.test(t) && !TICKER_SKIP.has(t));
+      if (!ticker || seen.has(ticker)) continue;
+
+      // Extract all numbers from the row
+      const nums = tokens
+        .map(t => parseFloat(t.replace(/,/g, '')))
+        .filter(n => !isNaN(n) && n > 0 && n < 1_000_000);
+
+      if (nums.length < 2) continue;
+
+      // Price  = first decimal number
+      const price = nums.find(n => !Number.isInteger(n));
+      // Shares = last whole number (Shares column is the rightmost)
+      const intNums = nums.filter(n => Number.isInteger(n));
+      const shares  = intNums.length ? intNums[intNums.length - 1] : null;
+
+      if (!price || !shares) continue;
+
+      seen.add(ticker);
+      results.push({ ticker, shares, uploadPrice: price });
+    }
+
+    return results;
   }
 
   function setOcrProgress(pct, label) {
