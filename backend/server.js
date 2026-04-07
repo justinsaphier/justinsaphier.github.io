@@ -17,13 +17,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret-in-production';
 const USERS_FILE = path.join(__dirname, 'users.json');
 
 app.use(cors({
-  origin: [
-    'https://justinsaphier.github.io',
-    'http://localhost:3000',
-    'http://localhost:5500',
-    'http://127.0.0.1:5500',
-    'null', // file:// local development
-  ],
+  origin: (origin, cb) => cb(null, true), // allow all origins (public API)
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
