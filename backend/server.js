@@ -54,7 +54,19 @@ function requireAuth(req, res, next) {
   }
 }
 
-// ── Stock prices ──────────────────────────────────────────────────────────────
+// ── Stock prices & news ───────────────────────────────────────────────────────
+
+async function fetchNews(ticker) {
+  try {
+    const result = await yahoo.search(ticker, { newsCount: 3, enableFuzzyQuery: false });
+    return (result.news || [])
+      .slice(0, 3)
+      .map(n => n.title)
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
 
 async function fetchPrices(tickers) {
   const results = {};
@@ -130,9 +142,14 @@ async function sendPortfolioEmail(email, investments) {
 
     if (Math.abs(p.dayChangePct) >= 5) {
       const dir = p.dayChangePct > 0 ? 'surged' : 'dropped';
-      alerts.push(`<b>${inv.ticker}</b> ${dir} <b>${Math.abs(p.dayChangePct).toFixed(1)}%</b> today`);
+      alerts.push({ ticker: inv.ticker, dir, pct: p.dayChangePct });
     }
   }
+
+  // Fetch news headlines for any big movers
+  await Promise.all(alerts.map(async a => {
+    a.headlines = await fetchNews(a.ticker);
+  }));
 
   const gain    = totalValue - totalCost;
   const gainPct = totalCost > 0 ? (gain / totalCost) * 100 : 0;
@@ -141,8 +158,20 @@ async function sendPortfolioEmail(email, investments) {
   const today   = new Date().toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
 
   const alertBlock = alerts.length
-    ? `<div style="margin-top:24px;padding:14px 18px;background:#1e2235;border-left:3px solid #facc15;border-radius:6px;font-size:14px;line-height:1.8;">
-         ⚠️ <b>Notable Moves</b><br>${alerts.join('<br>')}
+    ? `<div style="margin-top:24px;padding:18px 20px;background:#1e2235;border-left:3px solid #facc15;border-radius:8px;font-size:14px;line-height:1.8;">
+        <div style="font-weight:700;font-size:15px;margin-bottom:12px;">⚠️ Notable Moves</div>
+        ${alerts.map(a => `
+          <div style="margin-bottom:14px;">
+            <div style="font-weight:700;color:${a.pct > 0 ? '#4ade80' : '#f87171'};">
+              ${a.ticker} ${a.dir} ${Math.abs(a.pct).toFixed(1)}% today
+            </div>
+            ${a.headlines.length
+              ? `<div style="margin-top:6px;color:#94a3b8;font-size:13px;">
+                  ${a.headlines.map(h => `• ${h}`).join('<br>')}
+                </div>`
+              : `<div style="color:#5a6380;font-size:12px;margin-top:4px;">No recent headlines found.</div>`
+            }
+          </div>`).join('')}
        </div>`
     : '';
 
