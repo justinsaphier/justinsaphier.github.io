@@ -1072,6 +1072,7 @@
       });
 
       setOcrProgress(100, 'Done! Reviewing results…');
+      console.log('=== RAW OCR TEXT ===\n' + text + '\n=== END OCR ===');
       ocrDetected = parseHoldingsFromText(text);
 
       setTimeout(() => {
@@ -1102,61 +1103,71 @@
     'JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','DEC',
   ]);
 
-  function cleanLineNums(text) {
-    return text
-      .replace(/[+\-]?\d[\d,.]*%/g, '')           // strip percentages: +2.39%
-      .replace(/\d{1,2}:\d{2}\s*[AaPp][Mm]/g, '') // strip times: 12:49PM
-      .replace(/\b(EDT|EST|CST|PST|MDT|CDT|PDT|UTC|USD|EUR|GBP|CAD)\b/gi, '') // currency/tz
-      .replace(/\b\d+\.?\d*[MKBmkb]\b/g, '')      // strip volumes: 1.534M 78K
-      .replace(/,/g, '')                           // strip thousand separators
-      .replace(/\b[A-Z]{2,4}\b/g, '');            // strip remaining short caps (USD etc.)
+  function cleanForNums(line) {
+    return line
+      .replace(/[+\-]?\d[\d,.]*%/g, '')           // +2.39%  -1.03%
+      .replace(/\d{1,2}:\d{2}\s*[AP]M/gi, '')     // 12:49PM
+      .replace(/\b(EDT|EST|CST|PST|MDT|CDT|PDT|UTC|USD|EUR|GBP|CAD)\b/g, '')
+      .replace(/\b\d+\.?\d*[MKB]\b/gi, '')        // 1.534M  78K  2.1B
+      .replace(/,/g, '')                           // thousand separators
+      .replace(/\b[A-Z]{1,5}\b/g, '');            // remove any remaining caps (tickers, words)
   }
 
-  function numsFrom(text) {
-    return [...cleanLineNums(text).matchAll(/\b(\d+\.?\d*)\b/g)]
+  function numsFrom(line) {
+    return [...cleanForNums(line).matchAll(/\b(\d+\.?\d*)\b/g)]
       .map(m => parseFloat(m[1]))
       .filter(n => !isNaN(n) && n > 0 && n < 1_000_000);
   }
 
-  function parseHoldingsFromText(text) {
-    const lines   = text.split('\n').map(l => l.trim()).filter(Boolean);
+  function parseHoldingsFromText(rawText) {
+    // Normalize to uppercase so "Nov" and "NOV" are treated the same
+    const text  = rawText.toUpperCase();
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
     const results = [];
     const seen    = new Set();
 
-    // Two-pass: first find every ticker + its line index,
-    // then look in a 3-line window for the associated numbers.
-    // This handles OCR splitting ticker and numbers onto different lines.
-    const tickerCandidates = [];
     for (let i = 0; i < lines.length; i++) {
-      const caps = [...lines[i].matchAll(/\b([A-Z]{1,5})\b/g)].map(m => m[1]);
-      for (const t of caps) {
-        if (!TICKER_SKIP.has(t) && !seen.has(t)) {
-          tickerCandidates.push({ ticker: t, lineIdx: i });
-          seen.add(t); // avoid duplicates
+      const line = lines[i];
+
+      // Find first valid ticker on this line
+      const caps   = [...line.matchAll(/\b([A-Z]{1,5})\b/g)].map(m => m[1]);
+      const ticker = caps.find(t => !TICKER_SKIP.has(t) && !seen.has(t));
+      if (!ticker) continue;
+
+      // Price = first decimal number on this line after cleanup
+      const lineNums = numsFrom(line);
+      const price    = lineNums.find(n => String(n).includes('.') && n < 1_000_000);
+      if (!price) continue;
+
+      // ── Shares: two strategies ──────────────────────────────────────────────
+      // Tesseract often wraps the last (Shares) column to the START of the next
+      // OCR line. Strategy A catches that. Strategy B handles clean single-line rows.
+      let shares = null;
+
+      // Strategy A: integer at the very start of the next line (OCR wrap-around)
+      if (i + 1 < lines.length) {
+        const nextStart = lines[i + 1].match(/^(\d{1,7})(?:\s|$)/);
+        if (nextStart) {
+          const n = parseInt(nextStart[1]);
+          if (n > 0 && n < 1_000_000) shares = n;
         }
       }
+
+      // Strategy B: last integer in the current line (clean single-line OCR)
+      if (!shares) {
+        const intNums = lineNums.filter(n => Number.isInteger(n));
+        if (intNums.length) shares = intNums[intNums.length - 1];
+      }
+
+      if (!shares || shares === price) continue;
+
+      seen.add(ticker);
+      results.push({ ticker, shares, uploadPrice: price });
     }
 
-    for (const { ticker, lineIdx } of tickerCandidates) {
-      // Combine this line + the next line (OCR sometimes splits rows)
-      const window = lines.slice(lineIdx, Math.min(lineIdx + 2, lines.length)).join(' ');
-      const nums   = numsFrom(window);
-
-      if (nums.length < 2) continue;
-
-      // Shares = LAST whole number in the line (Shares column is rightmost)
-      const intNums = nums.filter(n => Number.isInteger(n));
-      const shares  = intNums.length ? intNums[intNums.length - 1] : null;
-      if (!shares) continue;
-
-      // Upload price = first decimal number that isn't the shares value
-      const uploadPrice = nums.find(n => n !== shares && String(n).includes('.'));
-      if (!uploadPrice) continue;
-
-      results.push({ ticker, shares, uploadPrice });
-    }
-
-    return results.slice(0, 25);
+    // Deduplicate (keep first occurrence of each ticker)
+    const seen2 = new Set();
+    return results.filter(r => seen2.has(r.ticker) ? false : seen2.add(r.ticker)).slice(0, 25);
   }
 
   function showOcrReview(detected) {
