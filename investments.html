@@ -5,61 +5,226 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Investment Tracker</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0f1a;
+      --surface: #161928;
+      --surface2: #1e2235;
+      --border: #2a2f4a;
+      --muted: #5a6380;
+      --text: #e2e8f0;
+      --text-dim: #94a3b8;
+      --green: #4ade80;
+      --red: #f87171;
+      --blue: #60a5fa;
+      --purple: #a78bfa;
+      --teal: #2dd4bf;
+      --radius: 14px;
+    }
 
     body {
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      background: #0f1117;
-      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
       min-height: 100vh;
-      padding: 24px 16px;
+      padding: 24px 16px 60px;
     }
 
-    .container { max-width: 860px; margin: 0 auto; }
+    .container { max-width: 900px; margin: 0 auto; }
 
-    h1 {
-      font-size: 1.8rem;
-      font-weight: 700;
-      margin-bottom: 4px;
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      margin-bottom: 32px;
+    }
+
+    .avatar-wrap {
+      position: relative;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .avatar {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--border);
+      background: var(--surface2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.2s;
+    }
+    .avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: none; }
+    .avatar img.loaded { display: block; }
+    .avatar-placeholder { font-size: 1.6rem; user-select: none; }
+    .avatar-wrap:hover .avatar { border-color: var(--blue); }
+    .avatar-overlay {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.2s;
+      font-size: 0.65rem;
       color: #fff;
+      text-align: center;
+      line-height: 1.2;
+      padding: 4px;
     }
-    .subtitle { color: #718096; font-size: 0.9rem; margin-bottom: 32px; }
+    .avatar-wrap:hover .avatar-overlay { opacity: 1; }
+    #avatarInput { display: none; }
 
+    .header-text h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #fff;
+      line-height: 1.15;
+    }
+    .header-text .subtitle { color: var(--muted); font-size: 0.88rem; margin-top: 3px; }
+
+    /* ── Cards ── */
     .card {
-      background: #1a1d27;
-      border: 1px solid #2d3148;
-      border-radius: 12px;
-      padding: 24px;
-      margin-bottom: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 24px;
+      margin-bottom: 18px;
     }
 
-    .card h2 {
-      font-size: 1rem;
+    .card-title {
+      font-size: 0.72rem;
       font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #a0aec0;
+      letter-spacing: 0.08em;
+      color: var(--muted);
       margin-bottom: 16px;
     }
 
+    /* ── Summary Grid ── */
     .summary-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
     }
 
     .stat-box {
-      background: #12151f;
-      border-radius: 8px;
-      padding: 16px;
+      background: var(--surface2);
+      border-radius: 10px;
+      padding: 14px 16px;
       text-align: center;
     }
-    .stat-box .label { font-size: 0.75rem; color: #718096; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
-    .stat-box .value { font-size: 1.5rem; font-weight: 700; }
-    .stat-box .value.positive { color: #48bb78; }
-    .stat-box .value.negative { color: #fc8181; }
-    .stat-box .value.neutral { color: #e2e8f0; }
+    .stat-box .label {
+      font-size: 0.68rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin-bottom: 6px;
+    }
+    .stat-box .value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .stat-box .value.positive { color: var(--green); }
+    .stat-box .value.negative { color: var(--red); }
 
+    /* ── Holdings ── */
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .section-header .card-title { margin-bottom: 0; }
+
+    .refresh-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .refresh-btn:hover { border-color: var(--blue); color: var(--blue); }
+    .refresh-btn.spinning .icon { display: inline-block; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    thead th {
+      text-align: left;
+      padding: 8px 10px;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    tbody tr {
+      border-bottom: 1px solid var(--surface2);
+      transition: background 0.15s;
+    }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,0.03); }
+    tbody td { padding: 13px 10px; vertical-align: middle; }
+
+    .ticker-badge {
+      font-weight: 700;
+      color: var(--blue);
+      font-size: 0.95rem;
+      background: rgba(96,165,250,0.1);
+      padding: 3px 8px;
+      border-radius: 6px;
+      display: inline-block;
+    }
+    .positive { color: var(--green); }
+    .negative { color: var(--red); }
+    .loading { color: var(--muted); font-style: italic; font-size: 0.82rem; }
+
+    .remove-btn {
+      background: transparent;
+      border: 1px solid rgba(248,113,113,0.3);
+      color: var(--red);
+      padding: 5px 11px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .remove-btn:hover { background: rgba(248,113,113,0.1); border-color: var(--red); }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--muted);
+    }
+    .empty-state .icon { font-size: 2.5rem; margin-bottom: 10px; }
+    .empty-state p { font-size: 0.9rem; }
+
+    /* ── Status bar ── */
+    .status-bar {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 10px;
+      min-height: 18px;
+      transition: color 0.2s;
+    }
+    .status-bar.success { color: var(--green); }
+    .status-bar.error   { color: var(--red); }
+
+    /* ── Forms ── */
     .form-row {
       display: flex;
       gap: 10px;
@@ -67,250 +232,334 @@
       align-items: flex-end;
     }
 
-    .form-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 120px; }
-    .form-group label { font-size: 0.75rem; color: #a0aec0; text-transform: uppercase; letter-spacing: 0.05em; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 110px; }
+    .form-group label {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 500;
+    }
 
-    input[type="text"], input[type="number"], input[type="tel"] {
-      background: #12151f;
-      border: 1px solid #2d3148;
-      border-radius: 6px;
+    input[type="text"],
+    input[type="number"],
+    input[type="tel"] {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
       padding: 10px 12px;
-      color: #e2e8f0;
-      font-size: 0.95rem;
+      color: var(--text);
+      font-size: 0.9rem;
       outline: none;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, box-shadow 0.2s;
       width: 100%;
     }
-    input:focus { border-color: #667eea; }
+    input:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(96,165,250,0.12);
+    }
+    input::placeholder { color: var(--muted); }
 
-    button {
+    .btn {
       padding: 10px 20px;
-      border-radius: 6px;
+      border-radius: 8px;
       border: none;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       font-weight: 600;
       cursor: pointer;
-      transition: opacity 0.2s, transform 0.1s;
+      transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
       white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
-    button:active { transform: scale(0.97); }
-    button:hover { opacity: 0.85; }
-
-    .btn-primary { background: #667eea; color: #fff; }
-    .btn-success { background: #48bb78; color: #fff; }
-    .btn-danger  { background: transparent; color: #fc8181; border: 1px solid #fc8181; padding: 6px 12px; font-size: 0.8rem; }
-    .btn-sms { background: #38b2ac; color: #fff; width: 100%; margin-top: 12px; padding: 12px; font-size: 1rem; }
+    .btn:active { transform: scale(0.97); }
+    .btn:hover { opacity: 0.88; }
+    .btn-primary { background: var(--blue); color: #0d0f1a; }
+    .btn-success { background: var(--green); color: #0d0f1a; }
+    .btn-sms {
+      background: linear-gradient(135deg, var(--teal), #0891b2);
+      color: #fff;
+      width: 100%;
+      margin-top: 14px;
+      padding: 13px;
+      font-size: 0.95rem;
+      justify-content: center;
+      box-shadow: 0 4px 14px rgba(45,212,191,0.2);
+    }
+    .btn-sms:hover { box-shadow: 0 6px 20px rgba(45,212,191,0.35); opacity: 1; }
 
     .phone-row { display: flex; gap: 10px; align-items: flex-end; }
     .phone-row .form-group { flex: 1; }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.9rem;
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 11px 20px;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      font-weight: 500;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+      transition: transform 0.3s cubic-bezier(.34,1.56,.64,1), opacity 0.3s;
+      opacity: 0;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 100;
     }
-    thead th {
-      text-align: left;
-      padding: 8px 10px;
-      font-size: 0.7rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: #718096;
-      border-bottom: 1px solid #2d3148;
-    }
-    tbody tr { border-bottom: 1px solid #1e2235; }
-    tbody tr:last-child { border-bottom: none; }
-    tbody td { padding: 12px 10px; }
+    #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    #toast.success { border-color: var(--green); color: var(--green); }
+    #toast.error   { border-color: var(--red);   color: var(--red);   }
 
-    .ticker { font-weight: 700; color: #90cdf4; font-size: 1rem; }
-    .positive { color: #48bb78; }
-    .negative { color: #fc8181; }
-    .loading { color: #718096; font-style: italic; }
-
-    .empty-state {
-      text-align: center;
-      padding: 32px;
-      color: #718096;
+    /* ── SMS note ── */
+    .sms-note {
+      font-size: 0.83rem;
+      color: var(--muted);
+      margin-bottom: 14px;
+      line-height: 1.5;
     }
 
-    .status-bar {
+    /* ── Day change pill ── */
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
       font-size: 0.8rem;
-      color: #718096;
-      margin-top: 12px;
-      min-height: 20px;
+      font-weight: 600;
     }
-    .status-bar.success { color: #48bb78; }
-    .status-bar.error { color: #fc8181; }
-
-    #refreshBtn {
-      background: transparent;
-      border: 1px solid #2d3148;
-      color: #a0aec0;
-      padding: 6px 14px;
-      font-size: 0.8rem;
-    }
-
-    .section-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 16px;
-    }
-    .section-header h2 { margin-bottom: 0; }
+    .pill.positive { background: rgba(74,222,128,0.12); color: var(--green); }
+    .pill.negative { background: rgba(248,113,113,0.12); color: var(--red); }
   </style>
 </head>
 <body>
 <div class="container">
 
-  <h1>Investment Tracker</h1>
-  <p class="subtitle">Track your portfolio and get a daily SMS summary.</p>
+  <!-- Header -->
+  <div class="header">
+    <div class="avatar-wrap" onclick="document.getElementById('avatarInput').click()" title="Click to upload photo">
+      <div class="avatar" id="avatarBox">
+        <img id="avatarImg" alt="Profile">
+        <span class="avatar-placeholder" id="avatarPlaceholder">📈</span>
+      </div>
+      <div class="avatar-overlay">Change<br>Photo</div>
+    </div>
+    <input type="file" id="avatarInput" accept="image/*">
+    <div class="header-text">
+      <h1>Investment Tracker</h1>
+      <div class="subtitle">Track your portfolio and get a daily SMS summary.</div>
+    </div>
+  </div>
 
-  <!-- Summary -->
+  <!-- Portfolio Summary -->
   <div class="card">
-    <h2>Portfolio Summary</h2>
+    <div class="card-title">Portfolio Summary</div>
     <div class="summary-grid">
       <div class="stat-box">
         <div class="label">Total Value</div>
-        <div class="value neutral" id="totalValue">—</div>
+        <div class="value" id="totalValue">—</div>
       </div>
       <div class="stat-box">
         <div class="label">Total Cost</div>
-        <div class="value neutral" id="totalCost">—</div>
+        <div class="value" id="totalCost">—</div>
       </div>
       <div class="stat-box">
         <div class="label">Total Gain / Loss</div>
-        <div class="value neutral" id="totalGain">—</div>
+        <div class="value" id="totalGain">—</div>
       </div>
       <div class="stat-box">
         <div class="label">% Return</div>
-        <div class="value neutral" id="totalPct">—</div>
+        <div class="value" id="totalPct">—</div>
       </div>
     </div>
   </div>
 
-  <!-- Holdings Table -->
+  <!-- Holdings -->
   <div class="card">
     <div class="section-header">
-      <h2>Holdings</h2>
-      <button id="refreshBtn" onclick="refreshPrices()">Refresh Prices</button>
+      <div class="card-title">Holdings</div>
+      <button class="refresh-btn" id="refreshBtn" onclick="refreshPrices()">
+        <span class="icon">↻</span> Refresh Prices
+      </button>
     </div>
     <div id="holdingsContainer">
-      <div class="empty-state">No holdings yet. Add one below.</div>
+      <div class="empty-state">
+        <div class="icon">📊</div>
+        <p>No holdings yet. Add your first investment below.</p>
+      </div>
     </div>
     <div class="status-bar" id="priceStatus"></div>
   </div>
 
   <!-- Add Investment -->
   <div class="card">
-    <h2>Add Investment</h2>
+    <div class="card-title">Add Investment</div>
     <div class="form-row">
       <div class="form-group">
         <label>Ticker Symbol</label>
-        <input type="text" id="ticker" placeholder="e.g. AAPL" style="text-transform:uppercase">
+        <input type="text" id="ticker" placeholder="e.g. AAPL" style="text-transform:uppercase"
+          onkeydown="if(event.key==='Enter') addInvestment()">
       </div>
       <div class="form-group">
         <label>Shares</label>
-        <input type="number" id="shares" placeholder="e.g. 10" min="0" step="any">
+        <input type="number" id="shares" placeholder="e.g. 10" min="0" step="any"
+          onkeydown="if(event.key==='Enter') addInvestment()">
       </div>
       <div class="form-group">
-        <label>Purchase Price ($)</label>
-        <input type="number" id="purchasePrice" placeholder="e.g. 150.00" min="0" step="any">
+        <label>Avg Purchase Price ($)</label>
+        <input type="number" id="purchasePrice" placeholder="e.g. 150.00" min="0" step="any"
+          onkeydown="if(event.key==='Enter') addInvestment()">
       </div>
-      <button class="btn-primary" onclick="addInvestment()">Add</button>
+      <button class="btn btn-primary" onclick="addInvestment()">+ Add</button>
     </div>
     <div class="status-bar" id="addStatus"></div>
   </div>
 
-  <!-- Phone / SMS -->
+  <!-- Daily Email -->
   <div class="card">
-    <h2>Daily SMS Alerts</h2>
-    <p style="font-size:0.85rem; color:#718096; margin-bottom:14px;">
-      Enter your phone number to receive a daily portfolio summary via text. Sent at 8:00 AM ET on weekdays.
+    <div class="card-title">Daily Email Alerts</div>
+    <p class="sms-note">
+      Enter your email address to receive a daily portfolio summary.
+      Sent at <strong>8:00 AM ET</strong> on weekdays. Requires the backend server to be running.
     </p>
     <div class="phone-row">
       <div class="form-group">
-        <label>Phone Number</label>
-        <input type="tel" id="phoneNumber" placeholder="+1 (555) 000-0000">
+        <label>Email Address</label>
+        <input type="email" id="emailAddress" placeholder="you@example.com"
+          onkeydown="if(event.key==='Enter') saveEmail()">
       </div>
-      <button class="btn-success" onclick="savePhone()">Save</button>
+      <button class="btn btn-success" onclick="saveEmail()">Save</button>
     </div>
-    <button class="btn-sms" onclick="sendTestSMS()">Send Test SMS Now</button>
+    <button class="btn btn-sms" onclick="sendTestEmail()">&#9993; Send Test Email Now</button>
     <div class="status-bar" id="smsStatus"></div>
   </div>
 
 </div>
+
+<div id="toast"></div>
 
 <script>
   // Replace with your Render URL after deploying, e.g. https://investment-tracker-xxxx.onrender.com
   const API = 'http://localhost:3000';
 
   let investments = [];
-  let phone = '';
+  let email = '';
+  let toastTimer = null;
 
+  // ── Toast ────────────────────────────────────────────────────────────────────
+  function toast(msg, type = '') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = `show ${type}`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+  }
+
+  // ── Avatar ───────────────────────────────────────────────────────────────────
+  document.getElementById('avatarInput').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const src = ev.target.result;
+      localStorage.setItem('avatar', src);
+      applyAvatar(src);
+    };
+    reader.readAsDataURL(file);
+  });
+
+  function applyAvatar(src) {
+    if (!src) return;
+    const img = document.getElementById('avatarImg');
+    const placeholder = document.getElementById('avatarPlaceholder');
+    img.src = src;
+    img.onload = () => {
+      img.classList.add('loaded');
+      placeholder.style.display = 'none';
+    };
+  }
+
+  // ── Local storage ─────────────────────────────────────────────────────────────
   function loadLocal() {
     try {
       investments = JSON.parse(localStorage.getItem('investments') || '[]');
-      phone = localStorage.getItem('phone') || '';
-    } catch { investments = []; phone = ''; }
+      email = localStorage.getItem('email') || '';
+    } catch { investments = []; email = ''; }
   }
 
   function saveLocal() {
     localStorage.setItem('investments', JSON.stringify(
       investments.map(({ ticker, shares, purchasePrice }) => ({ ticker, shares, purchasePrice }))
     ));
-    localStorage.setItem('phone', phone);
+    localStorage.setItem('email', email);
   }
 
+  // ── Init ──────────────────────────────────────────────────────────────────────
   function init() {
     loadLocal();
-    if (phone) document.getElementById('phoneNumber').value = phone;
+    applyAvatar(localStorage.getItem('avatar'));
+    if (email) document.getElementById('emailAddress').value = email;
     renderTable();
     if (investments.length) refreshPrices();
+  }
+
+  // ── Render table ──────────────────────────────────────────────────────────────
+  function fmt(n) {
+    return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   function renderTable() {
     const container = document.getElementById('holdingsContainer');
     if (!investments.length) {
-      container.innerHTML = '<div class="empty-state">No holdings yet. Add one below.</div>';
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="icon">📊</div>
+          <p>No holdings yet. Add your first investment below.</p>
+        </div>`;
       clearSummary();
       return;
     }
 
-    let rows = investments.map((inv, i) => {
+    const rows = investments.map((inv, i) => {
       const cost = inv.shares * inv.purchasePrice;
-      const currentPrice = inv.currentPrice;
-      let gainCell = '<span class="loading">loading...</span>';
-      let pctCell = '';
-      let valueCell = `$${cost.toFixed(2)}`;
-      let dayCell = '';
+      const cp = inv.currentPrice;
 
-      if (currentPrice !== undefined) {
-        const value = inv.shares * currentPrice;
+      let gainCell = '<span class="loading">fetching…</span>';
+      let pctCell = '';
+      let valueCell = `$${fmt(cost)}`;
+      let dayCell = '—';
+
+      if (cp !== undefined) {
+        const value = inv.shares * cp;
         const gain = value - cost;
         const pct = (gain / cost) * 100;
         const cls = gain >= 0 ? 'positive' : 'negative';
         const sign = gain >= 0 ? '+' : '';
-        gainCell = `<span class="${cls}">${sign}$${gain.toFixed(2)}</span>`;
+        gainCell = `<span class="${cls}">${sign}$${fmt(gain)}</span>`;
         pctCell = `<span class="${cls}">${sign}${pct.toFixed(2)}%</span>`;
-        valueCell = `$${value.toFixed(2)}`;
+        valueCell = `$${fmt(value)}`;
 
         if (inv.dayChangePct !== undefined) {
           const dc = inv.dayChangePct;
           const dcCls = dc >= 0 ? 'positive' : 'negative';
-          dayCell = `<span class="${dcCls}">${dc >= 0 ? '+' : ''}${dc.toFixed(2)}%</span>`;
+          dayCell = `<span class="pill ${dcCls}">${dc >= 0 ? '+' : ''}${dc.toFixed(2)}%</span>`;
         }
       }
 
       return `
         <tr>
-          <td><span class="ticker">${inv.ticker}</span></td>
-          <td>${inv.shares}</td>
-          <td>$${inv.purchasePrice.toFixed(2)}</td>
-          <td>${currentPrice !== undefined ? '$' + currentPrice.toFixed(2) : '<span class="loading">...</span>'}</td>
+          <td><span class="ticker-badge">${inv.ticker}</span></td>
+          <td>${inv.shares.toLocaleString()}</td>
+          <td>$${fmt(inv.purchasePrice)}</td>
+          <td>${cp !== undefined ? '$' + fmt(cp) : '<span class="loading">…</span>'}</td>
           <td>${valueCell}</td>
           <td>${gainCell} ${pctCell}</td>
           <td>${dayCell}</td>
-          <td><button class="btn-danger" onclick="removeInvestment(${i})">Remove</button></td>
+          <td><button class="remove-btn" onclick="confirmRemove(${i})">Remove</button></td>
         </tr>`;
     }).join('');
 
@@ -328,13 +577,13 @@
     updateSummary();
   }
 
+  // ── Prices ────────────────────────────────────────────────────────────────────
   async function fetchPrice(ticker) {
     const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=2d`;
     const proxies = [
       `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`,
       `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`,
     ];
-
     let lastErr;
     for (const url of proxies) {
       try {
@@ -344,21 +593,20 @@
         const meta = data.chart.result[0].meta;
         const price = meta.regularMarketPrice;
         const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? price;
-        const dayChangePct = ((price - prevClose) / prevClose) * 100;
-        return { price, dayChangePct };
-      } catch (e) {
-        lastErr = e;
-      }
+        return { price, dayChangePct: ((price - prevClose) / prevClose) * 100 };
+      } catch (e) { lastErr = e; }
     }
     throw lastErr;
   }
 
   async function refreshPrices() {
     if (!investments.length) return;
-    setStatus('priceStatus', 'Fetching prices...', '');
+    const btn = document.getElementById('refreshBtn');
+    btn.classList.add('spinning');
+    setStatus('priceStatus', 'Fetching prices…', '');
     let anyFailed = false;
 
-    await Promise.all(investments.map(async (inv) => {
+    await Promise.all(investments.map(async inv => {
       try {
         const { price, dayChangePct } = await fetchPrice(inv.ticker);
         inv.currentPrice = price;
@@ -369,39 +617,39 @@
       }
     }));
 
+    btn.classList.remove('spinning');
     renderTable();
-    setStatus(
-      'priceStatus',
-      anyFailed ? 'Some prices could not be fetched.' : `Last updated: ${new Date().toLocaleTimeString()}`,
-      anyFailed ? 'error' : 'success'
-    );
+    if (anyFailed) {
+      setStatus('priceStatus', 'Some prices could not be fetched.', 'error');
+    } else {
+      setStatus('priceStatus', `Last updated: ${new Date().toLocaleTimeString()}`, 'success');
+    }
   }
 
+  // ── Summary ───────────────────────────────────────────────────────────────────
   function updateSummary() {
-    let totalCost = 0, totalValue = 0;
-    let allPriced = true;
+    let totalCost = 0, totalValue = 0, allPriced = true;
     investments.forEach(inv => {
       totalCost += inv.shares * inv.purchasePrice;
       if (inv.currentPrice !== undefined) totalValue += inv.shares * inv.currentPrice;
       else allPriced = false;
     });
 
-    document.getElementById('totalCost').textContent = `$${totalCost.toFixed(2)}`;
+    setText('totalCost', `$${fmt(totalCost)}`, '');
 
     if (allPriced && totalValue > 0) {
       const gain = totalValue - totalCost;
       const pct = (gain / totalCost) * 100;
       const cls = gain >= 0 ? 'positive' : 'negative';
       const sign = gain >= 0 ? '+' : '';
-
-      setText('totalValue', `$${totalValue.toFixed(2)}`, 'neutral');
-      setText('totalGain', `${sign}$${gain.toFixed(2)}`, cls);
+      setText('totalValue', `$${fmt(totalValue)}`, '');
+      setText('totalGain', `${sign}$${fmt(gain)}`, cls);
       setText('totalPct', `${sign}${pct.toFixed(2)}%`, cls);
     }
   }
 
   function clearSummary() {
-    ['totalValue','totalCost','totalGain','totalPct'].forEach(id => setText(id, '—', 'neutral'));
+    ['totalValue','totalCost','totalGain','totalPct'].forEach(id => setText(id, '—', ''));
   }
 
   function setText(id, text, cls) {
@@ -410,13 +658,18 @@
     el.className = `value ${cls}`;
   }
 
+  // ── Add / Remove ──────────────────────────────────────────────────────────────
   async function addInvestment() {
     const ticker = document.getElementById('ticker').value.trim().toUpperCase();
     const shares = parseFloat(document.getElementById('shares').value);
     const purchasePrice = parseFloat(document.getElementById('purchasePrice').value);
 
-    if (!ticker || isNaN(shares) || isNaN(purchasePrice) || shares <= 0 || purchasePrice <= 0) {
-      setStatus('addStatus', 'Please fill in all fields with valid values.', 'error');
+    if (!ticker) { setStatus('addStatus', 'Please enter a ticker symbol.', 'error'); return; }
+    if (isNaN(shares) || shares <= 0) { setStatus('addStatus', 'Please enter a valid number of shares.', 'error'); return; }
+    if (isNaN(purchasePrice) || purchasePrice <= 0) { setStatus('addStatus', 'Please enter a valid purchase price.', 'error'); return; }
+
+    if (investments.some(i => i.ticker === ticker)) {
+      setStatus('addStatus', `${ticker} is already in your portfolio.`, 'error');
       return;
     }
 
@@ -424,52 +677,67 @@
     document.getElementById('ticker').value = '';
     document.getElementById('shares').value = '';
     document.getElementById('purchasePrice').value = '';
+    document.getElementById('ticker').focus();
 
     persist();
     renderTable();
-    setStatus('addStatus', `Added ${ticker}`, 'success');
+    setStatus('addStatus', '', '');
+    toast(`Added ${ticker}`, 'success');
     refreshPrices();
   }
 
-  function removeInvestment(index) {
+  function confirmRemove(index) {
+    const ticker = investments[index].ticker;
+    if (!confirm(`Remove ${ticker} from your portfolio?`)) return;
     investments.splice(index, 1);
     persist();
     renderTable();
+    toast(`Removed ${ticker}`);
     if (investments.length) refreshPrices();
   }
 
-  function savePhone() {
-    phone = document.getElementById('phoneNumber').value.trim();
-    if (!phone) { setStatus('smsStatus', 'Please enter a phone number.', 'error'); return; }
+  // ── Email ─────────────────────────────────────────────────────────────────────
+  function saveEmail() {
+    const val = document.getElementById('emailAddress').value.trim();
+    if (!val) { setStatus('smsStatus', 'Please enter an email address.', 'error'); return; }
+    email = val;
     persist();
-    setStatus('smsStatus', 'Phone number saved.', 'success');
+    setStatus('smsStatus', '', '');
+    toast('Email address saved.', 'success');
   }
 
+  async function sendTestEmail() {
+    email = document.getElementById('emailAddress').value.trim();
+    if (!email) { setStatus('smsStatus', 'Enter and save your email address first.', 'error'); return; }
+    if (!investments.length) { setStatus('smsStatus', 'Add at least one investment first.', 'error'); return; }
+
+    setStatus('smsStatus', 'Sending email…', '');
+    try {
+      persist();
+      const res = await fetch(`${API}/api/send-email`, { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        setStatus('smsStatus', '', '');
+        toast('Email sent! Check your inbox.', 'success');
+      } else {
+        setStatus('smsStatus', `Error: ${data.error}`, 'error');
+      }
+    } catch {
+      setStatus('smsStatus', 'Could not reach the backend server. Deploy to Render to enable email.', 'error');
+    }
+  }
+
+  // ── Persist ───────────────────────────────────────────────────────────────────
   function persist() {
     saveLocal();
-    // Silently sync to backend if available (needed for SMS scheduling)
     fetch(`${API}/api/data`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ investments: investments.map(({ ticker, shares, purchasePrice }) => ({ ticker, shares, purchasePrice })), phone })
+      body: JSON.stringify({
+        investments: investments.map(({ ticker, shares, purchasePrice }) => ({ ticker, shares, purchasePrice })),
+        email
+      })
     }).catch(() => {});
-  }
-
-  async function sendTestSMS() {
-    phone = document.getElementById('phoneNumber').value.trim();
-    if (!phone) { setStatus('smsStatus', 'Enter and save your phone number first.', 'error'); return; }
-    if (!investments.length) { setStatus('smsStatus', 'Add at least one investment first.', 'error'); return; }
-
-    setStatus('smsStatus', 'Sending SMS...', '');
-    try {
-      persist();
-      const res = await fetch(`${API}/api/send-sms`, { method: 'POST' });
-      const data = await res.json();
-      if (data.ok) setStatus('smsStatus', 'SMS sent! Check your phone.', 'success');
-      else setStatus('smsStatus', `Error: ${data.error}`, 'error');
-    } catch (e) {
-      setStatus('smsStatus', 'Could not reach the backend server. Make sure it is running to send SMS.', 'error');
-    }
   }
 
   function setStatus(id, msg, type) {
