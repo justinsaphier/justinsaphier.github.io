@@ -4,116 +4,274 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Investment Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #0d0f1a;
-      --surface: #161928;
+      --bg:       #0d0f1a;
+      --surface:  #161928;
       --surface2: #1e2235;
-      --border: #2a2f4a;
-      --muted: #5a6380;
-      --text: #e2e8f0;
-      --text-dim: #94a3b8;
-      --green: #4ade80;
-      --red: #f87171;
-      --blue: #60a5fa;
-      --purple: #a78bfa;
-      --teal: #2dd4bf;
-      --radius: 14px;
+      --border:   #2a2f4a;
+      --muted:    #5a6380;
+      --text:     #e2e8f0;
+      --dim:      #94a3b8;
+      --green:    #4ade80;
+      --red:      #f87171;
+      --blue:     #60a5fa;
+      --teal:     #2dd4bf;
+      --yellow:   #facc15;
+      --r:        14px;
     }
+
+    /* ── Skip link (accessibility) ─────────────────────────────── */
+    .skip-link {
+      position: absolute;
+      top: -100%;
+      left: 16px;
+      background: var(--blue);
+      color: #000;
+      padding: 8px 16px;
+      border-radius: 0 0 8px 8px;
+      font-weight: 700;
+      z-index: 999;
+      text-decoration: none;
+    }
+    .skip-link:focus { top: 0; }
 
     body {
       font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
-      padding: 24px 16px 60px;
     }
 
-    .container { max-width: 900px; margin: 0 auto; }
-
-    /* ── Header ── */
-    .header {
-      display: flex;
-      align-items: center;
-      gap: 18px;
-      margin-bottom: 32px;
-    }
-
-    .avatar-wrap {
-      position: relative;
-      flex-shrink: 0;
-      cursor: pointer;
-    }
-    .avatar {
-      width: 64px;
-      height: 64px;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 2px solid var(--border);
-      background: var(--surface2);
+    /* ── Auth screen ─────────────────────────────────────────────── */
+    #authScreen {
+      min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: border-color 0.2s;
+      padding: 24px 16px;
     }
-    .avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: none; }
-    .avatar img.loaded { display: block; }
-    .avatar-placeholder { font-size: 1.6rem; user-select: none; }
-    .avatar-wrap:hover .avatar { border-color: var(--blue); }
-    .avatar-overlay {
-      position: absolute;
-      inset: 0;
-      border-radius: 50%;
-      background: rgba(0,0,0,0.55);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      opacity: 0;
-      transition: opacity 0.2s;
-      font-size: 0.65rem;
-      color: #fff;
+
+    .auth-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .auth-logo {
+      font-size: 2.2rem;
       text-align: center;
-      line-height: 1.2;
-      padding: 4px;
+      margin-bottom: 6px;
     }
-    .avatar-wrap:hover .avatar-overlay { opacity: 1; }
+    .auth-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 4px;
+    }
+    .auth-sub {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-bottom: 28px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      margin-bottom: 14px;
+    }
+    .form-group label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    input[type="tel"] {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 11px 14px;
+      color: var(--text);
+      font-size: 0.95rem;
+      outline: none;
+      width: 100%;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(96,165,250,0.15);
+    }
+    input::placeholder { color: var(--muted); }
+    input[aria-invalid="true"] { border-color: var(--red); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 11px 22px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s, box-shadow 0.2s;
+      white-space: nowrap;
+    }
+    .btn:focus-visible {
+      outline: 2px solid var(--blue);
+      outline-offset: 2px;
+    }
+    .btn:active  { transform: scale(0.97); }
+    .btn:hover   { opacity: 0.88; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+    .btn-primary { background: var(--blue);  color: #0d0f1a; width: 100%; margin-top: 6px; }
+    .btn-success { background: var(--green); color: #0d0f1a; }
+    .btn-ghost   { background: transparent; border: 1px solid var(--border); color: var(--dim); }
+    .btn-danger  { background: transparent; border: 1px solid rgba(248,113,113,.3); color: var(--red); font-size: 0.8rem; padding: 6px 12px; }
+    .btn-email   {
+      background: linear-gradient(135deg, var(--teal), #0891b2);
+      color: #fff;
+      width: 100%;
+      margin-top: 14px;
+      padding: 13px;
+      font-size: 0.95rem;
+      box-shadow: 0 4px 14px rgba(45,212,191,.2);
+    }
+    .btn-email:hover { box-shadow: 0 6px 20px rgba(45,212,191,.35); opacity: 1; }
+
+    .auth-toggle {
+      text-align: center;
+      margin-top: 18px;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .auth-toggle button {
+      background: none;
+      border: none;
+      color: var(--blue);
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 0;
+      text-decoration: underline;
+    }
+    .auth-toggle button:focus-visible { outline: 2px solid var(--blue); border-radius: 2px; }
+
+    /* ── Error / status messages ─────────────────────────────────── */
+    .field-error {
+      font-size: 0.78rem;
+      color: var(--red);
+      margin-top: 2px;
+    }
+
+    .status-bar {
+      font-size: 0.82rem;
+      min-height: 20px;
+      margin-top: 10px;
+      color: var(--muted);
+    }
+    .status-bar.success { color: var(--green); }
+    .status-bar.error   { color: var(--red);   }
+
+    /* ── App layout ──────────────────────────────────────────────── */
+    #appScreen { display: none; padding: 24px 16px 64px; }
+
+    .container { max-width: 920px; margin: 0 auto; }
+
+    .app-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+
+    /* avatar */
+    .avatar-wrap { position: relative; flex-shrink: 0; cursor: pointer; }
+    .avatar-circle {
+      width: 60px; height: 60px;
+      border-radius: 50%;
+      background: var(--surface2);
+      border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+      transition: border-color 0.2s;
+      font-size: 1.5rem;
+    }
+    .avatar-circle img { width: 100%; height: 100%; object-fit: cover; display: none; }
+    .avatar-circle img.loaded { display: block; }
+    .avatar-circle .emoji { display: block; }
+    .avatar-circle img.loaded ~ .emoji { display: none; }
+    .avatar-wrap:hover .avatar-circle { border-color: var(--blue); }
+    .avatar-overlay {
+      position: absolute; inset: 0; border-radius: 50%;
+      background: rgba(0,0,0,.55);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity 0.2s;
+      font-size: 0.6rem; color: #fff; text-align: center; line-height: 1.3;
+    }
+    .avatar-wrap:hover .avatar-overlay,
+    .avatar-wrap:focus .avatar-overlay { opacity: 1; }
+    .avatar-wrap:focus-visible { outline: 2px solid var(--blue); border-radius: 50%; }
     #avatarInput { display: none; }
 
-    .header-text h1 {
-      font-size: 1.75rem;
-      font-weight: 700;
-      color: #fff;
-      line-height: 1.15;
-    }
-    .header-text .subtitle { color: var(--muted); font-size: 0.88rem; margin-top: 3px; }
+    .app-title { flex: 1; }
+    .app-title h1 { font-size: 1.6rem; font-weight: 700; }
+    .app-title .user-email { font-size: 0.83rem; color: var(--muted); margin-top: 2px; }
 
-    /* ── Cards ── */
+    .sign-out-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--dim);
+      padding: 7px 14px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .sign-out-btn:hover { border-color: var(--red); color: var(--red); }
+    .sign-out-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+    /* ── Cards ───────────────────────────────────────────────────── */
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: var(--radius);
+      border-radius: var(--r);
       padding: 22px 24px;
       margin-bottom: 18px;
     }
 
     .card-title {
       font-size: 0.72rem;
-      font-weight: 600;
+      font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.08em;
       color: var(--muted);
       margin-bottom: 16px;
     }
 
-    /* ── Summary Grid ── */
+    /* ── Summary ─────────────────────────────────────────────────── */
     .summary-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
       gap: 12px;
     }
-
     .stat-box {
       background: var(--surface2);
       border-radius: 10px;
@@ -127,347 +285,496 @@
       letter-spacing: 0.07em;
       margin-bottom: 6px;
     }
-    .stat-box .value {
-      font-size: 1.4rem;
-      font-weight: 700;
-      color: var(--text);
-    }
+    .stat-box .value { font-size: 1.4rem; font-weight: 700; }
     .stat-box .value.positive { color: var(--green); }
     .stat-box .value.negative { color: var(--red); }
 
-    /* ── Holdings ── */
+    /* ── Holdings table ──────────────────────────────────────────── */
     .section-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 8px;
     }
     .section-header .card-title { margin-bottom: 0; }
 
     .refresh-btn {
       background: var(--surface2);
       border: 1px solid var(--border);
-      color: var(--text-dim);
-      padding: 6px 14px;
+      color: var(--dim);
+      padding: 7px 14px;
       border-radius: 8px;
       font-size: 0.8rem;
-      font-weight: 500;
+      font-weight: 600;
       cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.2s;
+      display: flex; align-items: center; gap: 6px;
+      transition: border-color 0.2s, color 0.2s;
     }
     .refresh-btn:hover { border-color: var(--blue); color: var(--blue); }
-    .refresh-btn.spinning .icon { display: inline-block; animation: spin 0.8s linear infinite; }
+    .refresh-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+    .refresh-btn.spinning .spin-icon { animation: spin 0.8s linear infinite; display: inline-block; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; min-width: 520px; }
     thead th {
-      text-align: left;
-      padding: 8px 10px;
-      font-size: 0.68rem;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      color: var(--muted);
-      border-bottom: 1px solid var(--border);
+      text-align: left; padding: 8px 10px;
+      font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--muted); border-bottom: 1px solid var(--border);
     }
-    tbody tr {
-      border-bottom: 1px solid var(--surface2);
-      transition: background 0.15s;
-    }
+    tbody tr { border-bottom: 1px solid var(--surface2); }
     tbody tr:last-child { border-bottom: none; }
-    tbody tr:hover { background: rgba(255,255,255,0.03); }
-    tbody td { padding: 13px 10px; vertical-align: middle; }
+    tbody tr:hover { background: rgba(255,255,255,.025); }
+    tbody td { padding: 12px 10px; vertical-align: middle; }
 
     .ticker-badge {
-      font-weight: 700;
-      color: var(--blue);
-      font-size: 0.95rem;
-      background: rgba(96,165,250,0.1);
-      padding: 3px 8px;
-      border-radius: 6px;
-      display: inline-block;
+      font-weight: 700; color: var(--blue); font-size: 0.93rem;
+      background: rgba(96,165,250,.1); padding: 3px 8px; border-radius: 6px;
     }
     .positive { color: var(--green); }
     .negative { color: var(--red); }
-    .loading { color: var(--muted); font-style: italic; font-size: 0.82rem; }
+    .loading  { color: var(--muted); font-style: italic; font-size: 0.82rem; }
 
-    .remove-btn {
-      background: transparent;
-      border: 1px solid rgba(248,113,113,0.3);
-      color: var(--red);
-      padding: 5px 11px;
-      border-radius: 6px;
-      font-size: 0.78rem;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .remove-btn:hover { background: rgba(248,113,113,0.1); border-color: var(--red); }
-
-    .empty-state {
-      text-align: center;
-      padding: 40px 20px;
-      color: var(--muted);
-    }
-    .empty-state .icon { font-size: 2.5rem; margin-bottom: 10px; }
-    .empty-state p { font-size: 0.9rem; }
-
-    /* ── Status bar ── */
-    .status-bar {
-      font-size: 0.8rem;
-      color: var(--muted);
-      margin-top: 10px;
-      min-height: 18px;
-      transition: color 0.2s;
-    }
-    .status-bar.success { color: var(--green); }
-    .status-bar.error   { color: var(--red); }
-
-    /* ── Forms ── */
-    .form-row {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      align-items: flex-end;
-    }
-
-    .form-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 110px; }
-    .form-group label {
-      font-size: 0.7rem;
-      color: var(--text-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      font-weight: 500;
-    }
-
-    input[type="text"],
-    input[type="number"],
-    input[type="tel"] {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px 12px;
-      color: var(--text);
-      font-size: 0.9rem;
-      outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s;
-      width: 100%;
-    }
-    input:focus {
-      border-color: var(--blue);
-      box-shadow: 0 0 0 3px rgba(96,165,250,0.12);
-    }
-    input::placeholder { color: var(--muted); }
-
-    .btn {
-      padding: 10px 20px;
-      border-radius: 8px;
-      border: none;
-      font-size: 0.88rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
-      white-space: nowrap;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .btn:active { transform: scale(0.97); }
-    .btn:hover { opacity: 0.88; }
-    .btn-primary { background: var(--blue); color: #0d0f1a; }
-    .btn-success { background: var(--green); color: #0d0f1a; }
-    .btn-sms {
-      background: linear-gradient(135deg, var(--teal), #0891b2);
-      color: #fff;
-      width: 100%;
-      margin-top: 14px;
-      padding: 13px;
-      font-size: 0.95rem;
-      justify-content: center;
-      box-shadow: 0 4px 14px rgba(45,212,191,0.2);
-    }
-    .btn-sms:hover { box-shadow: 0 6px 20px rgba(45,212,191,0.35); opacity: 1; }
-
-    .phone-row { display: flex; gap: 10px; align-items: flex-end; }
-    .phone-row .form-group { flex: 1; }
-
-    /* ── Toast ── */
-    #toast {
-      position: fixed;
-      bottom: 28px;
-      left: 50%;
-      transform: translateX(-50%) translateY(80px);
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 11px 20px;
-      border-radius: 10px;
-      font-size: 0.88rem;
-      font-weight: 500;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
-      transition: transform 0.3s cubic-bezier(.34,1.56,.64,1), opacity 0.3s;
-      opacity: 0;
-      pointer-events: none;
-      white-space: nowrap;
-      z-index: 100;
-    }
-    #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
-    #toast.success { border-color: var(--green); color: var(--green); }
-    #toast.error   { border-color: var(--red);   color: var(--red);   }
-
-    /* ── SMS note ── */
-    .sms-note {
-      font-size: 0.83rem;
-      color: var(--muted);
-      margin-bottom: 14px;
-      line-height: 1.5;
-    }
-
-    /* ── Day change pill ── */
     .pill {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 20px;
-      font-size: 0.8rem;
-      font-weight: 600;
+      display: inline-block; padding: 2px 8px; border-radius: 20px;
+      font-size: 0.78rem; font-weight: 600;
     }
-    .pill.positive { background: rgba(74,222,128,0.12); color: var(--green); }
-    .pill.negative { background: rgba(248,113,113,0.12); color: var(--red); }
+    .pill.positive { background: rgba(74,222,128,.12); color: var(--green); }
+    .pill.negative { background: rgba(248,113,113,.12); color: var(--red); }
+
+    .empty-state { text-align: center; padding: 36px 20px; color: var(--muted); }
+    .empty-state .e-icon { font-size: 2.4rem; margin-bottom: 10px; }
+
+    /* ── Add investment form ──────────────────────────────────────── */
+    .form-row {
+      display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;
+    }
+    .form-row .form-group { flex: 1; min-width: 110px; margin-bottom: 0; }
+
+    /* ── Upload area ─────────────────────────────────────────────── */
+    .upload-divider {
+      display: flex; align-items: center; gap: 12px;
+      margin: 18px 0; color: var(--muted); font-size: 0.82rem;
+    }
+    .upload-divider::before,
+    .upload-divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: 10px;
+      padding: 28px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+    .upload-zone:hover,
+    .upload-zone:focus-within { border-color: var(--blue); background: rgba(96,165,250,.04); }
+    .upload-zone.drag-over    { border-color: var(--teal); background: rgba(45,212,191,.06); }
+    .upload-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .upload-icon  { font-size: 2rem; margin-bottom: 8px; }
+    .upload-label { font-size: 0.9rem; color: var(--dim); }
+    .upload-label strong { color: var(--blue); }
+    .upload-hint  { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+
+    /* ── OCR progress / review ───────────────────────────────────── */
+    #ocrProgress {
+      display: none;
+      background: var(--surface2);
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin-top: 14px;
+    }
+    .progress-bar-wrap {
+      height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin: 10px 0;
+    }
+    .progress-bar { height: 100%; background: var(--blue); border-radius: 3px; transition: width 0.3s; width: 0%; }
+    .progress-label { font-size: 0.82rem; color: var(--dim); }
+
+    #ocrReview { display: none; margin-top: 14px; }
+    .ocr-review-title { font-size: 0.82rem; font-weight: 600; color: var(--dim); margin-bottom: 10px; }
+    .ocr-row {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding: 8px 10px; background: var(--surface2); border-radius: 8px; margin-bottom: 6px;
+    }
+    .ocr-row input { flex: 1; min-width: 80px; padding: 6px 10px; font-size: 0.85rem; }
+    .ocr-row-label { font-size: 0.72rem; color: var(--muted); margin-right: 2px; }
+    .ocr-add-btn {
+      background: var(--green); color: #0d0f1a; border: none;
+      padding: 6px 12px; border-radius: 6px; font-size: 0.82rem; font-weight: 700; cursor: pointer;
+    }
+    .ocr-add-btn:hover { opacity: 0.85; }
+
+    /* ── Email card ───────────────────────────────────────────────── */
+    .email-note { font-size: 0.84rem; color: var(--muted); margin-bottom: 14px; line-height: 1.55; }
+
+    /* ── Toast ───────────────────────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 28px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); padding: 11px 22px; border-radius: 10px;
+      font-size: 0.88rem; font-weight: 500;
+      box-shadow: 0 8px 30px rgba(0,0,0,.4);
+      transition: transform .3s cubic-bezier(.34,1.56,.64,1), opacity .3s;
+      opacity: 0; pointer-events: none; white-space: nowrap; z-index: 100;
+    }
+    #toast.show   { transform: translateX(-50%) translateY(0); opacity: 1; }
+    #toast.success { border-color: var(--green); color: var(--green); }
+    #toast.error   { border-color: var(--red);   color: var(--red); }
+
+    /* ── Responsive ─────────────────────────────────────────────── */
+    @media (max-width: 480px) {
+      .auth-card { padding: 28px 20px; }
+      .card { padding: 18px 16px; }
+      .app-header { gap: 12px; }
+    }
   </style>
 </head>
 <body>
+
+<a href="#main" class="skip-link">Skip to main content</a>
+
+<!-- ── Auth screen ──────────────────────────────────────────────────────── -->
+<div id="authScreen" role="main">
+  <div class="auth-card" role="region" aria-labelledby="authHeading">
+    <div class="auth-logo" aria-hidden="true">📈</div>
+    <h1 class="auth-title" id="authHeading">Investment Tracker</h1>
+    <p class="auth-sub" id="authSub">Sign in to your account</p>
+
+    <form id="authForm" novalidate>
+      <div class="form-group">
+        <label for="authEmail">Email address</label>
+        <input type="email" id="authEmail" name="email"
+          autocomplete="email" placeholder="you@example.com"
+          required aria-required="true" aria-describedby="authEmailError">
+        <span class="field-error" id="authEmailError" role="alert" aria-live="polite"></span>
+      </div>
+      <div class="form-group">
+        <label for="authPassword">Password</label>
+        <input type="password" id="authPassword" name="password"
+          autocomplete="current-password" placeholder="••••••••"
+          required aria-required="true" aria-describedby="authPasswordError">
+        <span class="field-error" id="authPasswordError" role="alert" aria-live="polite"></span>
+      </div>
+      <div id="authRegisterExtra" style="display:none;">
+        <div class="form-group">
+          <label for="authPasswordConfirm">Confirm password</label>
+          <input type="password" id="authPasswordConfirm" name="passwordConfirm"
+            autocomplete="new-password" placeholder="••••••••"
+            aria-describedby="authConfirmError">
+          <span class="field-error" id="authConfirmError" role="alert" aria-live="polite"></span>
+        </div>
+      </div>
+      <div class="status-bar error" id="authError" role="alert" aria-live="assertive"></div>
+      <button type="submit" class="btn btn-primary" id="authSubmitBtn">Sign In</button>
+    </form>
+
+    <div class="auth-toggle">
+      <span id="authToggleText">Don't have an account?</span>
+      <button type="button" id="authToggleBtn" onclick="toggleAuthMode()">Create one</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── App screen ───────────────────────────────────────────────────────── -->
+<div id="appScreen" role="main">
+<a id="main" tabindex="-1" style="position:absolute;top:0"></a>
 <div class="container">
 
   <!-- Header -->
-  <div class="header">
-    <div class="avatar-wrap" onclick="document.getElementById('avatarInput').click()" title="Click to upload photo">
-      <div class="avatar" id="avatarBox">
-        <img id="avatarImg" alt="Profile">
-        <span class="avatar-placeholder" id="avatarPlaceholder">📈</span>
+  <header class="app-header">
+    <div class="avatar-wrap" role="button" tabindex="0"
+      aria-label="Upload profile photo"
+      onclick="document.getElementById('avatarInput').click()"
+      onkeydown="if(event.key==='Enter'||event.key===' ') document.getElementById('avatarInput').click()">
+      <div class="avatar-circle" aria-hidden="true">
+        <img id="avatarImg" alt="">
+        <span class="emoji">📈</span>
       </div>
-      <div class="avatar-overlay">Change<br>Photo</div>
+      <div class="avatar-overlay" aria-hidden="true">Change<br>Photo</div>
     </div>
-    <input type="file" id="avatarInput" accept="image/*">
-    <div class="header-text">
+    <input type="file" id="avatarInput" accept="image/*" aria-label="Upload profile photo">
+
+    <div class="app-title">
       <h1>Investment Tracker</h1>
-      <div class="subtitle">Track your portfolio and get a daily SMS summary.</div>
+      <div class="user-email" id="userEmailDisplay" aria-label="Signed in as"></div>
     </div>
-  </div>
+
+    <button class="sign-out-btn" onclick="signOut()" aria-label="Sign out">Sign Out</button>
+  </header>
 
   <!-- Portfolio Summary -->
-  <div class="card">
-    <div class="card-title">Portfolio Summary</div>
-    <div class="summary-grid">
-      <div class="stat-box">
+  <section class="card" aria-labelledby="summaryHeading">
+    <h2 class="card-title" id="summaryHeading">Portfolio Summary</h2>
+    <div class="summary-grid" role="list">
+      <div class="stat-box" role="listitem">
         <div class="label">Total Value</div>
-        <div class="value" id="totalValue">—</div>
+        <div class="value" id="totalValue" aria-label="Total value">—</div>
       </div>
-      <div class="stat-box">
+      <div class="stat-box" role="listitem">
         <div class="label">Total Cost</div>
-        <div class="value" id="totalCost">—</div>
+        <div class="value" id="totalCost" aria-label="Total cost">—</div>
       </div>
-      <div class="stat-box">
+      <div class="stat-box" role="listitem">
         <div class="label">Total Gain / Loss</div>
-        <div class="value" id="totalGain">—</div>
+        <div class="value" id="totalGain" aria-label="Total gain or loss">—</div>
       </div>
-      <div class="stat-box">
+      <div class="stat-box" role="listitem">
         <div class="label">% Return</div>
-        <div class="value" id="totalPct">—</div>
+        <div class="value" id="totalPct" aria-label="Percent return">—</div>
       </div>
     </div>
-  </div>
+  </section>
 
   <!-- Holdings -->
-  <div class="card">
+  <section class="card" aria-labelledby="holdingsHeading">
     <div class="section-header">
-      <div class="card-title">Holdings</div>
-      <button class="refresh-btn" id="refreshBtn" onclick="refreshPrices()">
-        <span class="icon">↻</span> Refresh Prices
+      <h2 class="card-title" id="holdingsHeading">Holdings</h2>
+      <button class="refresh-btn" id="refreshBtn" onclick="refreshPrices()"
+        aria-label="Refresh stock prices">
+        <span class="spin-icon" aria-hidden="true">↻</span> Refresh Prices
       </button>
     </div>
-    <div id="holdingsContainer">
-      <div class="empty-state">
-        <div class="icon">📊</div>
-        <p>No holdings yet. Add your first investment below.</p>
+    <div class="table-wrap">
+      <div id="holdingsContainer">
+        <div class="empty-state">
+          <div class="e-icon" aria-hidden="true">📊</div>
+          <p>No holdings yet. Add your first investment below.</p>
+        </div>
       </div>
     </div>
-    <div class="status-bar" id="priceStatus"></div>
-  </div>
+    <div class="status-bar" id="priceStatus" aria-live="polite"></div>
+  </section>
 
   <!-- Add Investment -->
-  <div class="card">
-    <div class="card-title">Add Investment</div>
-    <div class="form-row">
+  <section class="card" aria-labelledby="addHeading">
+    <h2 class="card-title" id="addHeading">Add Investment</h2>
+
+    <!-- Manual entry -->
+    <div class="form-row" role="group" aria-label="Manual investment entry">
       <div class="form-group">
-        <label>Ticker Symbol</label>
-        <input type="text" id="ticker" placeholder="e.g. AAPL" style="text-transform:uppercase"
+        <label for="ticker">Ticker symbol</label>
+        <input type="text" id="ticker" placeholder="e.g. AAPL"
+          style="text-transform:uppercase"
+          aria-label="Stock ticker symbol"
           onkeydown="if(event.key==='Enter') addInvestment()">
       </div>
       <div class="form-group">
-        <label>Shares</label>
+        <label for="shares">Shares</label>
         <input type="number" id="shares" placeholder="e.g. 10" min="0" step="any"
+          aria-label="Number of shares"
           onkeydown="if(event.key==='Enter') addInvestment()">
       </div>
       <div class="form-group">
-        <label>Avg Purchase Price ($)</label>
+        <label for="purchasePrice">Avg purchase price ($)</label>
         <input type="number" id="purchasePrice" placeholder="e.g. 150.00" min="0" step="any"
+          aria-label="Average purchase price in dollars"
           onkeydown="if(event.key==='Enter') addInvestment()">
       </div>
-      <button class="btn btn-primary" onclick="addInvestment()">+ Add</button>
+      <button class="btn btn-success" onclick="addInvestment()" aria-label="Add investment">
+        + Add
+      </button>
     </div>
-    <div class="status-bar" id="addStatus"></div>
-  </div>
+    <div class="status-bar" id="addStatus" aria-live="polite"></div>
+
+    <!-- Or upload a photo -->
+    <div class="upload-divider" aria-hidden="true">or upload a photo of your holdings</div>
+
+    <div class="upload-zone" id="uploadZone"
+      role="button" tabindex="0"
+      aria-label="Upload a photo of your holdings to automatically detect them. Drag and drop or click to select."
+      ondragover="handleDragOver(event)"
+      ondragleave="handleDragLeave(event)"
+      ondrop="handleDrop(event)"
+      onkeydown="if(event.key==='Enter'||event.key===' ') document.getElementById('holdingsPhoto').click()">
+      <input type="file" id="holdingsPhoto" accept="image/*"
+        aria-label="Select image of your holdings"
+        onchange="handlePhotoUpload(event)">
+      <div class="upload-icon" aria-hidden="true">📷</div>
+      <div class="upload-label">
+        <strong>Click to upload</strong> or drag &amp; drop
+      </div>
+      <div class="upload-hint">Screenshot from Robinhood, Fidelity, Schwab, etc.</div>
+    </div>
+
+    <!-- OCR progress -->
+    <div id="ocrProgress" role="status" aria-live="polite" aria-label="Image analysis progress">
+      <div class="progress-label" id="ocrLabel">Analyzing image…</div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar" id="ocrBar" role="progressbar"
+          aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+      </div>
+    </div>
+
+    <!-- OCR review -->
+    <div id="ocrReview" aria-live="polite">
+      <div class="ocr-review-title" id="ocrReviewTitle"></div>
+      <div id="ocrRows"></div>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-success" onclick="confirmOcrRows()" id="ocrConfirmBtn">
+          Add Detected Holdings
+        </button>
+        <button class="btn btn-ghost" onclick="cancelOcr()">Cancel</button>
+      </div>
+    </div>
+  </section>
 
   <!-- Daily Email -->
-  <div class="card">
-    <div class="card-title">Daily Email Alerts</div>
-    <p class="sms-note">
-      Enter your email address to receive a daily portfolio summary.
-      Sent at <strong>8:00 AM ET</strong> on weekdays. Requires the backend server to be running.
+  <section class="card" aria-labelledby="emailHeading">
+    <h2 class="card-title" id="emailHeading">Daily Email Alerts</h2>
+    <p class="email-note">
+      Your daily portfolio summary is sent to your account email at
+      <strong>8:00 AM ET</strong> on weekdays. No extra setup needed once the backend is running.
     </p>
-    <div class="phone-row">
-      <div class="form-group">
-        <label>Email Address</label>
-        <input type="email" id="emailAddress" placeholder="you@example.com"
-          onkeydown="if(event.key==='Enter') saveEmail()">
-      </div>
-      <button class="btn btn-success" onclick="saveEmail()">Save</button>
-    </div>
-    <button class="btn btn-sms" onclick="sendTestEmail()">&#9993; Send Test Email Now</button>
-    <div class="status-bar" id="smsStatus"></div>
-  </div>
+    <button class="btn btn-email" onclick="sendTestEmail()" aria-label="Send a test portfolio email now">
+      ✉ Send Test Email Now
+    </button>
+    <div class="status-bar" id="emailStatus" aria-live="polite"></div>
+  </section>
 
-</div>
+</div><!-- /container -->
+</div><!-- /appScreen -->
 
-<div id="toast"></div>
+<div id="toast" role="status" aria-live="polite"></div>
 
 <script>
+  // ── Config ──────────────────────────────────────────────────────────────────
   // Replace with your Render URL after deploying, e.g. https://investment-tracker-xxxx.onrender.com
   const API = 'http://localhost:3000';
 
-  let investments = [];
-  let email = '';
-  let toastTimer = null;
+  // ── State ───────────────────────────────────────────────────────────────────
+  let token        = localStorage.getItem('it_token') || null;
+  let currentEmail = localStorage.getItem('it_email') || null;
+  let investments  = [];
+  let isRegister   = false;
+  let ocrDetected  = [];
+  let toastTimer   = null;
 
-  // ── Toast ────────────────────────────────────────────────────────────────────
+  // ── Toast ───────────────────────────────────────────────────────────────────
   function toast(msg, type = '') {
     const el = document.getElementById('toast');
     el.textContent = msg;
     el.className = `show ${type}`;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+    toastTimer = setTimeout(() => el.className = '', 3200);
   }
 
-  // ── Avatar ───────────────────────────────────────────────────────────────────
+  // ── Auth mode toggle ────────────────────────────────────────────────────────
+  function toggleAuthMode() {
+    isRegister = !isRegister;
+    document.getElementById('authHeading').textContent     = isRegister ? 'Create Account' : 'Investment Tracker';
+    document.getElementById('authSub').textContent         = isRegister ? 'Track your portfolio in minutes' : 'Sign in to your account';
+    document.getElementById('authSubmitBtn').textContent   = isRegister ? 'Create Account' : 'Sign In';
+    document.getElementById('authToggleText').textContent  = isRegister ? 'Already have an account?' : "Don't have an account?";
+    document.getElementById('authToggleBtn').textContent   = isRegister ? 'Sign in' : 'Create one';
+    document.getElementById('authRegisterExtra').style.display = isRegister ? '' : 'none';
+    document.getElementById('authPassword').autocomplete  = isRegister ? 'new-password' : 'current-password';
+    clearAuthErrors();
+  }
+
+  function clearAuthErrors() {
+    ['authEmailError','authPasswordError','authConfirmError','authError'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = '';
+    });
+    document.getElementById('authEmail').removeAttribute('aria-invalid');
+    document.getElementById('authPassword').removeAttribute('aria-invalid');
+  }
+
+  // ── Auth form submit ────────────────────────────────────────────────────────
+  document.getElementById('authForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearAuthErrors();
+
+    const emailVal = document.getElementById('authEmail').value.trim();
+    const passVal  = document.getElementById('authPassword').value;
+    let valid = true;
+
+    if (!emailVal || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
+      document.getElementById('authEmailError').textContent = 'Please enter a valid email address.';
+      document.getElementById('authEmail').setAttribute('aria-invalid', 'true');
+      valid = false;
+    }
+    if (!passVal || passVal.length < 8) {
+      document.getElementById('authPasswordError').textContent = 'Password must be at least 8 characters.';
+      document.getElementById('authPassword').setAttribute('aria-invalid', 'true');
+      valid = false;
+    }
+    if (isRegister) {
+      const confirm = document.getElementById('authPasswordConfirm').value;
+      if (passVal !== confirm) {
+        document.getElementById('authConfirmError').textContent = 'Passwords do not match.';
+        valid = false;
+      }
+    }
+    if (!valid) return;
+
+    const btn = document.getElementById('authSubmitBtn');
+    btn.disabled = true;
+    btn.textContent = isRegister ? 'Creating account…' : 'Signing in…';
+
+    try {
+      const endpoint = isRegister ? '/api/register' : '/api/login';
+      const res  = await fetch(`${API}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailVal, password: passVal }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+
+      token        = data.token;
+      currentEmail = data.email;
+      localStorage.setItem('it_token', token);
+      localStorage.setItem('it_email', currentEmail);
+      showApp();
+    } catch (err) {
+      document.getElementById('authError').textContent = err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = isRegister ? 'Create Account' : 'Sign In';
+    }
+  });
+
+  // ── Show / hide screens ─────────────────────────────────────────────────────
+  function showApp() {
+    document.getElementById('authScreen').style.display = 'none';
+    document.getElementById('appScreen').style.display  = 'block';
+    document.getElementById('userEmailDisplay').textContent = currentEmail;
+    document.getElementById('userEmailDisplay').setAttribute('aria-label', `Signed in as ${currentEmail}`);
+    applyAvatar(localStorage.getItem('it_avatar'));
+    loadInvestments();
+  }
+
+  function showAuth() {
+    document.getElementById('appScreen').style.display  = 'none';
+    document.getElementById('authScreen').style.display = 'flex';
+    setTimeout(() => document.getElementById('authEmail').focus(), 50);
+  }
+
+  function signOut() {
+    token = null; currentEmail = null; investments = [];
+    localStorage.removeItem('it_token');
+    localStorage.removeItem('it_email');
+    showAuth();
+  }
+
+  // ── Avatar ──────────────────────────────────────────────────────────────────
   document.getElementById('avatarInput').addEventListener('change', e => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = ev => {
-      const src = ev.target.result;
-      localStorage.setItem('avatar', src);
-      applyAvatar(src);
+      localStorage.setItem('it_avatar', ev.target.result);
+      applyAvatar(ev.target.result);
+      toast('Profile photo updated.', 'success');
     };
     reader.readAsDataURL(file);
   });
@@ -475,39 +782,43 @@
   function applyAvatar(src) {
     if (!src) return;
     const img = document.getElementById('avatarImg');
-    const placeholder = document.getElementById('avatarPlaceholder');
     img.src = src;
-    img.onload = () => {
-      img.classList.add('loaded');
-      placeholder.style.display = 'none';
-    };
+    img.onload = () => img.classList.add('loaded');
   }
 
-  // ── Local storage ─────────────────────────────────────────────────────────────
-  function loadLocal() {
+  // ── Load investments from server ────────────────────────────────────────────
+  async function loadInvestments() {
     try {
-      investments = JSON.parse(localStorage.getItem('investments') || '[]');
-      email = localStorage.getItem('email') || '';
-    } catch { investments = []; email = ''; }
-  }
-
-  function saveLocal() {
-    localStorage.setItem('investments', JSON.stringify(
-      investments.map(({ ticker, shares, purchasePrice }) => ({ ticker, shares, purchasePrice }))
-    ));
-    localStorage.setItem('email', email);
-  }
-
-  // ── Init ──────────────────────────────────────────────────────────────────────
-  function init() {
-    loadLocal();
-    applyAvatar(localStorage.getItem('avatar'));
-    if (email) document.getElementById('emailAddress').value = email;
+      const res  = await fetch(`${API}/api/me`, { headers: authHeaders() });
+      if (res.status === 401) { signOut(); return; }
+      const data = await res.json();
+      investments = data.investments || [];
+    } catch {
+      investments = JSON.parse(localStorage.getItem('it_investments') || '[]');
+    }
     renderTable();
     if (investments.length) refreshPrices();
   }
 
-  // ── Render table ──────────────────────────────────────────────────────────────
+  function authHeaders() {
+    return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+  }
+
+  // ── Persist ─────────────────────────────────────────────────────────────────
+  function persist() {
+    localStorage.setItem('it_investments', JSON.stringify(
+      investments.map(({ ticker, shares, purchasePrice }) => ({ ticker, shares, purchasePrice }))
+    ));
+    fetch(`${API}/api/data`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        investments: investments.map(({ ticker, shares, purchasePrice }) => ({ ticker, shares, purchasePrice }))
+      }),
+    }).catch(() => {});
+  }
+
+  // ── Render table ─────────────────────────────────────────────────────────────
   function fmt(n) {
     return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
@@ -517,7 +828,7 @@
     if (!investments.length) {
       container.innerHTML = `
         <div class="empty-state">
-          <div class="icon">📊</div>
+          <div class="e-icon" aria-hidden="true">📊</div>
           <p>No holdings yet. Add your first investment below.</p>
         </div>`;
       clearSummary();
@@ -526,74 +837,70 @@
 
     const rows = investments.map((inv, i) => {
       const cost = inv.shares * inv.purchasePrice;
-      const cp = inv.currentPrice;
-
+      const cp   = inv.currentPrice;
       let gainCell = '<span class="loading">fetching…</span>';
-      let pctCell = '';
-      let valueCell = `$${fmt(cost)}`;
-      let dayCell = '—';
+      let pctCell = '', valueCell = `$${fmt(cost)}`, dayCell = '—';
 
       if (cp !== undefined) {
         const value = inv.shares * cp;
-        const gain = value - cost;
-        const pct = (gain / cost) * 100;
-        const cls = gain >= 0 ? 'positive' : 'negative';
-        const sign = gain >= 0 ? '+' : '';
-        gainCell = `<span class="${cls}">${sign}$${fmt(gain)}</span>`;
-        pctCell = `<span class="${cls}">${sign}${pct.toFixed(2)}%</span>`;
+        const gain  = value - cost;
+        const pct   = (gain / cost) * 100;
+        const cls   = gain >= 0 ? 'positive' : 'negative';
+        const sign  = gain >= 0 ? '+' : '';
+        gainCell  = `<span class="${cls}">${sign}$${fmt(gain)}</span>`;
+        pctCell   = `<span class="${cls}">${sign}${pct.toFixed(2)}%</span>`;
         valueCell = `$${fmt(value)}`;
-
         if (inv.dayChangePct !== undefined) {
           const dc = inv.dayChangePct;
-          const dcCls = dc >= 0 ? 'positive' : 'negative';
-          dayCell = `<span class="pill ${dcCls}">${dc >= 0 ? '+' : ''}${dc.toFixed(2)}%</span>`;
+          dayCell = `<span class="pill ${dc >= 0 ? 'positive' : 'negative'}">${dc >= 0 ? '+' : ''}${dc.toFixed(2)}%</span>`;
         }
       }
 
-      return `
-        <tr>
-          <td><span class="ticker-badge">${inv.ticker}</span></td>
-          <td>${inv.shares.toLocaleString()}</td>
-          <td>$${fmt(inv.purchasePrice)}</td>
-          <td>${cp !== undefined ? '$' + fmt(cp) : '<span class="loading">…</span>'}</td>
-          <td>${valueCell}</td>
-          <td>${gainCell} ${pctCell}</td>
-          <td>${dayCell}</td>
-          <td><button class="remove-btn" onclick="confirmRemove(${i})">Remove</button></td>
-        </tr>`;
+      return `<tr>
+        <td><span class="ticker-badge">${inv.ticker}</span></td>
+        <td>${Number(inv.shares).toLocaleString()}</td>
+        <td>$${fmt(inv.purchasePrice)}</td>
+        <td>${cp !== undefined ? '$'+fmt(cp) : '<span class="loading">…</span>'}</td>
+        <td>${valueCell}</td>
+        <td>${gainCell} ${pctCell}</td>
+        <td>${dayCell}</td>
+        <td>
+          <button class="btn btn-danger" onclick="confirmRemove(${i})"
+            aria-label="Remove ${inv.ticker} from portfolio">Remove</button>
+        </td>
+      </tr>`;
     }).join('');
 
     container.innerHTML = `
-      <table>
-        <thead>
-          <tr>
-            <th>Ticker</th><th>Shares</th><th>Avg Cost</th><th>Current</th>
-            <th>Value</th><th>Gain / Loss</th><th>Today</th><th></th>
-          </tr>
-        </thead>
+      <table aria-label="Holdings">
+        <thead><tr>
+          <th scope="col">Ticker</th><th scope="col">Shares</th>
+          <th scope="col">Avg Cost</th><th scope="col">Current</th>
+          <th scope="col">Value</th><th scope="col">Gain / Loss</th>
+          <th scope="col">Today</th><th scope="col"><span class="sr-only">Actions</span></th>
+        </tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
-
     updateSummary();
   }
 
-  // ── Prices ────────────────────────────────────────────────────────────────────
+  // ── Prices ──────────────────────────────────────────────────────────────────
   async function fetchPrice(ticker) {
     const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=2d`;
-    const proxies = [
+    const proxies  = [
       `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`,
       `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`,
     ];
     let lastErr;
     for (const url of proxies) {
       try {
-        const res = await fetch(url);
+        const res  = await fetch(url);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         const meta = data.chart.result[0].meta;
         const price = meta.regularMarketPrice;
-        const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? price;
-        return { price, dayChangePct: ((price - prevClose) / prevClose) * 100 };
+        const prev  = meta.chartPreviousClose ?? meta.previousClose ?? price;
+        return { price, dayChangePct: ((price - prev) / prev) * 100 };
       } catch (e) { lastErr = e; }
     }
     throw lastErr;
@@ -603,48 +910,43 @@
     if (!investments.length) return;
     const btn = document.getElementById('refreshBtn');
     btn.classList.add('spinning');
+    btn.setAttribute('aria-busy', 'true');
     setStatus('priceStatus', 'Fetching prices…', '');
     let anyFailed = false;
 
     await Promise.all(investments.map(async inv => {
       try {
         const { price, dayChangePct } = await fetchPrice(inv.ticker);
-        inv.currentPrice = price;
-        inv.dayChangePct = dayChangePct;
-      } catch (e) {
-        console.error(`Failed to fetch ${inv.ticker}:`, e);
-        anyFailed = true;
-      }
+        inv.currentPrice  = price;
+        inv.dayChangePct  = dayChangePct;
+      } catch { anyFailed = true; }
     }));
 
     btn.classList.remove('spinning');
+    btn.removeAttribute('aria-busy');
     renderTable();
-    if (anyFailed) {
-      setStatus('priceStatus', 'Some prices could not be fetched.', 'error');
-    } else {
-      setStatus('priceStatus', `Last updated: ${new Date().toLocaleTimeString()}`, 'success');
-    }
+    setStatus('priceStatus',
+      anyFailed ? 'Some prices could not be fetched.' : `Updated ${new Date().toLocaleTimeString()}`,
+      anyFailed ? 'error' : 'success');
   }
 
-  // ── Summary ───────────────────────────────────────────────────────────────────
+  // ── Summary ─────────────────────────────────────────────────────────────────
   function updateSummary() {
     let totalCost = 0, totalValue = 0, allPriced = true;
     investments.forEach(inv => {
-      totalCost += inv.shares * inv.purchasePrice;
+      totalCost  += inv.shares * inv.purchasePrice;
       if (inv.currentPrice !== undefined) totalValue += inv.shares * inv.currentPrice;
       else allPriced = false;
     });
-
     setText('totalCost', `$${fmt(totalCost)}`, '');
-
     if (allPriced && totalValue > 0) {
       const gain = totalValue - totalCost;
-      const pct = (gain / totalCost) * 100;
-      const cls = gain >= 0 ? 'positive' : 'negative';
+      const pct  = (gain / totalCost) * 100;
+      const cls  = gain >= 0 ? 'positive' : 'negative';
       const sign = gain >= 0 ? '+' : '';
       setText('totalValue', `$${fmt(totalValue)}`, '');
-      setText('totalGain', `${sign}$${fmt(gain)}`, cls);
-      setText('totalPct', `${sign}${pct.toFixed(2)}%`, cls);
+      setText('totalGain',  `${sign}$${fmt(gain)}`, cls);
+      setText('totalPct',   `${sign}${pct.toFixed(2)}%`, cls);
     }
   }
 
@@ -655,27 +957,23 @@
   function setText(id, text, cls) {
     const el = document.getElementById(id);
     el.textContent = text;
-    el.className = `value ${cls}`;
+    el.className   = `value ${cls}`;
   }
 
-  // ── Add / Remove ──────────────────────────────────────────────────────────────
-  async function addInvestment() {
-    const ticker = document.getElementById('ticker').value.trim().toUpperCase();
-    const shares = parseFloat(document.getElementById('shares').value);
+  // ── Add / Remove ─────────────────────────────────────────────────────────────
+  function addInvestment() {
+    const ticker        = document.getElementById('ticker').value.trim().toUpperCase();
+    const shares        = parseFloat(document.getElementById('shares').value);
     const purchasePrice = parseFloat(document.getElementById('purchasePrice').value);
 
-    if (!ticker) { setStatus('addStatus', 'Please enter a ticker symbol.', 'error'); return; }
-    if (isNaN(shares) || shares <= 0) { setStatus('addStatus', 'Please enter a valid number of shares.', 'error'); return; }
+    if (!ticker)                       { setStatus('addStatus', 'Please enter a ticker symbol.', 'error'); return; }
+    if (isNaN(shares) || shares <= 0)  { setStatus('addStatus', 'Please enter a valid number of shares.', 'error'); return; }
     if (isNaN(purchasePrice) || purchasePrice <= 0) { setStatus('addStatus', 'Please enter a valid purchase price.', 'error'); return; }
-
-    if (investments.some(i => i.ticker === ticker)) {
-      setStatus('addStatus', `${ticker} is already in your portfolio.`, 'error');
-      return;
-    }
+    if (investments.some(i => i.ticker === ticker)) { setStatus('addStatus', `${ticker} is already in your portfolio.`, 'error'); return; }
 
     investments.push({ ticker, shares, purchasePrice });
-    document.getElementById('ticker').value = '';
-    document.getElementById('shares').value = '';
+    document.getElementById('ticker').value        = '';
+    document.getElementById('shares').value        = '';
     document.getElementById('purchasePrice').value = '';
     document.getElementById('ticker').focus();
 
@@ -686,67 +984,182 @@
     refreshPrices();
   }
 
-  function confirmRemove(index) {
-    const ticker = investments[index].ticker;
+  function confirmRemove(i) {
+    const ticker = investments[i].ticker;
     if (!confirm(`Remove ${ticker} from your portfolio?`)) return;
-    investments.splice(index, 1);
+    investments.splice(i, 1);
     persist();
     renderTable();
     toast(`Removed ${ticker}`);
     if (investments.length) refreshPrices();
   }
 
-  // ── Email ─────────────────────────────────────────────────────────────────────
-  function saveEmail() {
-    const val = document.getElementById('emailAddress').value.trim();
-    if (!val) { setStatus('smsStatus', 'Please enter an email address.', 'error'); return; }
-    email = val;
-    persist();
-    setStatus('smsStatus', '', '');
-    toast('Email address saved.', 'success');
+  // ── Image upload + OCR ───────────────────────────────────────────────────────
+  function handleDragOver(e) {
+    e.preventDefault();
+    document.getElementById('uploadZone').classList.add('drag-over');
+  }
+  function handleDragLeave() {
+    document.getElementById('uploadZone').classList.remove('drag-over');
+  }
+  function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById('uploadZone').classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) runOcr(file);
+  }
+  function handlePhotoUpload(e) {
+    const file = e.target.files[0];
+    if (file) runOcr(file);
   }
 
-  async function sendTestEmail() {
-    email = document.getElementById('emailAddress').value.trim();
-    if (!email) { setStatus('smsStatus', 'Enter and save your email address first.', 'error'); return; }
-    if (!investments.length) { setStatus('smsStatus', 'Add at least one investment first.', 'error'); return; }
+  async function runOcr(file) {
+    document.getElementById('ocrProgress').style.display = 'block';
+    document.getElementById('ocrReview').style.display   = 'none';
+    setOcrProgress(0, 'Reading image…');
 
-    setStatus('smsStatus', 'Sending email…', '');
     try {
-      persist();
-      const res = await fetch(`${API}/api/send-email`, { method: 'POST' });
-      const data = await res.json();
-      if (data.ok) {
-        setStatus('smsStatus', '', '');
-        toast('Email sent! Check your inbox.', 'success');
-      } else {
-        setStatus('smsStatus', `Error: ${data.error}`, 'error');
+      const { data: { text } } = await Tesseract.recognize(file, 'eng', {
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            setOcrProgress(Math.round(m.progress * 100), 'Analyzing text…');
+          }
+        }
+      });
+
+      setOcrProgress(100, 'Done! Reviewing results…');
+      ocrDetected = parseHoldingsFromText(text);
+
+      setTimeout(() => {
+        document.getElementById('ocrProgress').style.display = 'none';
+        showOcrReview(ocrDetected);
+      }, 600);
+    } catch (err) {
+      document.getElementById('ocrProgress').style.display = 'none';
+      toast('Could not read the image. Try a clearer screenshot.', 'error');
+    }
+    document.getElementById('holdingsPhoto').value = '';
+  }
+
+  function setOcrProgress(pct, label) {
+    const bar = document.getElementById('ocrBar');
+    bar.style.width = `${pct}%`;
+    bar.setAttribute('aria-valuenow', pct);
+    document.getElementById('ocrLabel').textContent = label;
+  }
+
+  function parseHoldingsFromText(text) {
+    const lines   = text.split('\n').map(l => l.trim()).filter(Boolean);
+    const results = [];
+    const tickerRe = /\b([A-Z]{1,5})\b/g;
+    const numRe    = /\$?([\d,]+\.?\d*)/g;
+
+    for (const line of lines) {
+      const tickers = [...line.matchAll(tickerRe)].map(m => m[1]);
+      const nums    = [...line.matchAll(numRe)]
+        .map(m => parseFloat(m[1].replace(',', '')))
+        .filter(n => !isNaN(n) && n > 0);
+
+      // Skip lines that are just common English words mistaken as tickers
+      const skip = new Set(['THE','AND','FOR','YOU','ARE','INC','LLC','ETF','USD','OF','IN','AT','IS','IT','OR','AS','BY','TO']);
+      const validTickers = tickers.filter(t => !skip.has(t) && t.length >= 1 && t.length <= 5);
+
+      if (validTickers.length === 1 && nums.length >= 2) {
+        results.push({
+          ticker: validTickers[0],
+          shares: nums[0],
+          purchasePrice: nums[1],
+        });
       }
-    } catch {
-      setStatus('smsStatus', 'Could not reach the backend server. Deploy to Render to enable email.', 'error');
+    }
+    return results.slice(0, 20); // cap at 20
+  }
+
+  function showOcrReview(detected) {
+    const title = document.getElementById('ocrReviewTitle');
+    const rows  = document.getElementById('ocrRows');
+
+    if (!detected.length) {
+      title.textContent = "We couldn't automatically detect holdings. Fill in manually above.";
+      rows.innerHTML = '';
+      document.getElementById('ocrConfirmBtn').style.display = 'none';
+    } else {
+      title.textContent = `We detected ${detected.length} holding${detected.length > 1 ? 's' : ''}. Review and confirm:`;
+      document.getElementById('ocrConfirmBtn').style.display = '';
+      rows.innerHTML = detected.map((h, i) => `
+        <div class="ocr-row" role="group" aria-label="Detected holding ${i+1}">
+          <span class="ocr-row-label">Ticker</span>
+          <input type="text" value="${h.ticker}" id="ocrTicker${i}"
+            style="text-transform:uppercase;max-width:90px"
+            aria-label="Ticker symbol for holding ${i+1}">
+          <span class="ocr-row-label">Shares</span>
+          <input type="number" value="${h.shares}" id="ocrShares${i}" min="0" step="any"
+            aria-label="Shares for holding ${i+1}">
+          <span class="ocr-row-label">Avg Price $</span>
+          <input type="number" value="${h.purchasePrice}" id="ocrPrice${i}" min="0" step="any"
+            aria-label="Purchase price for holding ${i+1}">
+        </div>`).join('');
+    }
+
+    document.getElementById('ocrReview').style.display = 'block';
+    title.focus();
+  }
+
+  function confirmOcrRows() {
+    let added = 0;
+    for (let i = 0; i < ocrDetected.length; i++) {
+      const ticker = document.getElementById(`ocrTicker${i}`).value.trim().toUpperCase();
+      const shares = parseFloat(document.getElementById(`ocrShares${i}`).value);
+      const price  = parseFloat(document.getElementById(`ocrPrice${i}`).value);
+      if (!ticker || isNaN(shares) || isNaN(price) || shares <= 0 || price <= 0) continue;
+      if (investments.some(inv => inv.ticker === ticker)) continue;
+      investments.push({ ticker, shares, purchasePrice: price });
+      added++;
+    }
+    cancelOcr();
+    if (added) {
+      persist();
+      renderTable();
+      refreshPrices();
+      toast(`Added ${added} holding${added > 1 ? 's' : ''} from photo.`, 'success');
+    } else {
+      toast('No new holdings were added.', 'error');
     }
   }
 
-  // ── Persist ───────────────────────────────────────────────────────────────────
-  function persist() {
-    saveLocal();
-    fetch(`${API}/api/data`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        investments: investments.map(({ ticker, shares, purchasePrice }) => ({ ticker, shares, purchasePrice })),
-        email
-      })
-    }).catch(() => {});
+  function cancelOcr() {
+    document.getElementById('ocrReview').style.display   = 'none';
+    document.getElementById('ocrProgress').style.display = 'none';
+    ocrDetected = [];
   }
 
+  // ── Email ────────────────────────────────────────────────────────────────────
+  async function sendTestEmail() {
+    if (!investments.length) { setStatus('emailStatus', 'Add at least one investment first.', 'error'); return; }
+    setStatus('emailStatus', 'Sending email…', '');
+    try {
+      const res  = await fetch(`${API}/api/send-email`, { method: 'POST', headers: authHeaders() });
+      const data = await res.json();
+      if (data.ok) { setStatus('emailStatus', '', ''); toast('Email sent! Check your inbox.', 'success'); }
+      else setStatus('emailStatus', `Error: ${data.error}`, 'error');
+    } catch {
+      setStatus('emailStatus', 'Could not reach the backend server. Deploy to Render to enable email.', 'error');
+    }
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
   function setStatus(id, msg, type) {
     const el = document.getElementById(id);
     el.textContent = msg;
-    el.className = `status-bar ${type}`;
+    el.className   = `status-bar ${type}`;
   }
 
-  init();
+  // ── Init ─────────────────────────────────────────────────────────────────────
+  if (token && currentEmail) {
+    showApp();
+  } else {
+    showAuth();
+  }
 </script>
 </body>
 </html>
