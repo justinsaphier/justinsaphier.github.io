@@ -3,7 +3,9 @@ const express    = require('express');
 const cors       = require('cors');
 const cron       = require('node-cron');
 const nodemailer = require('nodemailer');
-const yahoo      = require('yahoo-finance2').default;
+// yahoo-finance2 v3: .default is the class, must be instantiated
+const YahooFinance = require('yahoo-finance2').default;
+const yahoo = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
 const fs         = require('fs');
@@ -14,7 +16,16 @@ const PORT     = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret-in-production';
 const USERS_FILE = path.join(__dirname, 'users.json');
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://justinsaphier.github.io',
+    'http://localhost:3000',
+    'http://localhost:5500',
+    'http://127.0.0.1:5500',
+    'null', // file:// local development
+  ],
+  credentials: true,
+}));
 app.use(express.json({ limit: '10mb' }));
 
 // ── User storage ──────────────────────────────────────────────────────────────
@@ -72,15 +83,17 @@ async function fetchPrices(tickers) {
   const results = {};
   await Promise.all(tickers.map(async (ticker) => {
     try {
-      const q = await yahoo.quote(ticker);
-      const price    = q.regularMarketPrice;
-      const prevClose = q.regularMarketPreviousClose;
+      const q = await yahoo.quote(ticker, {}, { validateResult: false });
+      const price     = q.regularMarketPrice ?? q.ask ?? q.bid;
+      const prevClose = q.regularMarketPreviousClose ?? q.previousClose ?? price;
+      if (!price) throw new Error('No price returned');
       results[ticker] = {
         price,
         dayChangePct: prevClose ? ((price - prevClose) / prevClose) * 100 : 0,
       };
+      console.log(`✓ ${ticker}: $${price}`);
     } catch (err) {
-      console.error(`fetchPrices ${ticker}:`, err.message);
+      console.error(`✗ fetchPrices ${ticker}: ${err.message}`);
     }
   }));
   return results;
@@ -268,6 +281,23 @@ app.post('/api/send-email', requireAuth, async (req, res) => {
     const result = await sendPortfolioEmail(req.user.email, user.investments);
     res.json({ ok: true, ...result });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Prices (public, no auth required) ────────────────────────────────────────
+
+app.get('/api/prices', async (req, res) => {
+  const raw = req.query.tickers;
+  if (!raw) return res.status(400).json({ error: 'tickers param required' });
+  const tickers = raw.split(',').map(t => t.trim().toUpperCase()).filter(Boolean);
+  console.log('Fetching prices for:', tickers);
+  try {
+    const prices = await fetchPrices(tickers);
+    console.log('Prices result:', prices);
+    res.json(prices);
+  } catch (err) {
+    console.error('Price fetch error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

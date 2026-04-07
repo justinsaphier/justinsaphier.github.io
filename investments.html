@@ -646,8 +646,12 @@
 
 <script>
   // ── Config ──────────────────────────────────────────────────────────────────
-  // Replace with your Render URL after deploying, e.g. https://investment-tracker-xxxx.onrender.com
-  const API = 'http://localhost:3000';
+  // Auto-detect: use localhost when developing, Render backend when live on GitHub Pages
+  const API = (window.location.hostname === 'localhost' ||
+               window.location.hostname === '127.0.0.1' ||
+               window.location.protocol === 'file:')
+    ? 'http://localhost:3000'
+    : 'https://justinsaphier-investments.onrender.com';
 
   // ── State ───────────────────────────────────────────────────────────────────
   let token        = localStorage.getItem('it_token') || null;

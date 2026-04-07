@@ -1,11 +1,17 @@
 services:
   - type: web
-    name: investment-tracker
+    name: justinsaphier-investments
     runtime: node
     rootDir: backend
     buildCommand: npm install
     startCommand: node server.js
     envVars:
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
@@ -16,5 +22,3 @@ services:
         sync: false
       - key: SMTP_PASS
         sync: false
-      - key: PORT
-        value: 10000
