@@ -721,19 +721,36 @@
     btn.textContent = isRegister ? 'Creating account…' : 'Signing in…';
 
     try {
-      const endpoint = isRegister ? '/api/register' : '/api/login';
-      const res  = await fetch(`${API}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailVal, password: passVal }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+      const key   = emailVal.toLowerCase();
+      const hash  = await hashPassword(passVal);
+      const users = getUsers();
 
-      token        = data.token;
-      currentEmail = data.email;
+      if (isRegister) {
+        if (users[key]) throw new Error('An account with this email already exists.');
+        users[key] = { passwordHash: hash, investments: [] };
+        saveUsers(users);
+      } else {
+        if (!users[key]) throw new Error('No account found with that email.');
+        if (users[key].passwordHash !== hash) throw new Error('Incorrect password.');
+      }
+
+      currentEmail = key;
+      token        = btoa(key + ':' + Date.now());
       localStorage.setItem('it_token', token);
       localStorage.setItem('it_email', currentEmail);
+
+      // Silently try to sync with backend (optional — needed only for emails)
+      fetch(`${API}/api/${isRegister ? 'register' : 'login'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: key, password: passVal }),
+      }).then(r => r.json()).then(d => {
+        if (d.token) {
+          token = d.token;
+          localStorage.setItem('it_token', token);
+        }
+      }).catch(() => {}); // backend offline is fine
+
       showApp();
     } catch (err) {
       document.getElementById('authError').textContent = err.message;
@@ -788,14 +805,26 @@
 
   // ── Load investments from server ────────────────────────────────────────────
   async function loadInvestments() {
-    try {
-      const res  = await fetch(`${API}/api/me`, { headers: authHeaders() });
-      if (res.status === 401) { signOut(); return; }
-      const data = await res.json();
-      investments = data.investments || [];
-    } catch {
-      investments = JSON.parse(localStorage.getItem('it_investments') || '[]');
-    }
+    // Always load from local storage first (works without server)
+    const users = getUsers();
+    investments = (users[currentEmail]?.investments) || [];
+
+    // Try to sync from backend (optional)
+    fetch(`${API}/api/me`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.investments?.length) {
+          investments = data.investments;
+          const users = getUsers();
+          if (users[currentEmail]) {
+            users[currentEmail].investments = investments;
+            saveUsers(users);
+          }
+          renderTable();
+          if (investments.length) refreshPrices();
+        }
+      }).catch(() => {});
+
     renderTable();
     if (investments.length) refreshPrices();
   }
@@ -806,9 +835,16 @@
 
   // ── Persist ─────────────────────────────────────────────────────────────────
   function persist() {
-    localStorage.setItem('it_investments', JSON.stringify(
-      investments.map(({ ticker, shares, purchasePrice }) => ({ ticker, shares, purchasePrice }))
-    ));
+    // Save locally first (always works)
+    const users = getUsers();
+    if (users[currentEmail]) {
+      users[currentEmail].investments = investments.map(
+        ({ ticker, shares, purchasePrice }) => ({ ticker, shares, purchasePrice })
+      );
+      saveUsers(users);
+    }
+
+    // Silently sync to backend if available (needed for scheduled emails)
     fetch(`${API}/api/data`, {
       method: 'POST',
       headers: authHeaders(),
@@ -1152,6 +1188,22 @@
     const el = document.getElementById(id);
     el.textContent = msg;
     el.className   = `status-bar ${type}`;
+  }
+
+  // ── Client-side auth helpers ─────────────────────────────────────────────────
+  async function hashPassword(password) {
+    const data   = new TextEncoder().encode(password);
+    const buffer = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2,'0')).join('');
+  }
+
+  function getUsers() {
+    try { return JSON.parse(localStorage.getItem('it_users') || '{}'); }
+    catch { return {}; }
+  }
+
+  function saveUsers(users) {
+    localStorage.setItem('it_users', JSON.stringify(users));
   }
 
   // ── Init ─────────────────────────────────────────────────────────────────────
