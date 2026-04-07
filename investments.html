@@ -573,9 +573,9 @@
           onkeydown="if(event.key==='Enter') addInvestment()">
       </div>
       <div class="form-group">
-        <label for="purchasePrice">Avg purchase price ($)</label>
+        <label for="purchasePrice">Price per share today ($)</label>
         <input type="number" id="purchasePrice" placeholder="e.g. 150.00" min="0" step="any"
-          aria-label="Average purchase price in dollars"
+          aria-label="Current price per share in dollars"
           onkeydown="if(event.key==='Enter') addInvestment()">
       </div>
       <button class="btn btn-success" onclick="addInvestment()" aria-label="Add investment">
@@ -872,33 +872,37 @@
     }
 
     const rows = investments.map((inv, i) => {
-      const cost = inv.shares * inv.purchasePrice;
-      const cp   = inv.currentPrice;
-      let gainCell = '<span class="loading">fetching…</span>';
-      let pctCell = '', valueCell = `$${fmt(cost)}`, dayCell = '—';
+      const uploadPrice = inv.purchasePrice;
+      const cp = inv.currentPrice;
+
+      // Change since upload
+      let changeCell = '<span class="loading">fetching…</span>';
+      let dayCell    = '—';
 
       if (cp !== undefined) {
-        const value = inv.shares * cp;
-        const gain  = value - cost;
-        const pct   = (gain / cost) * 100;
-        const cls   = gain >= 0 ? 'positive' : 'negative';
-        const sign  = gain >= 0 ? '+' : '';
-        gainCell  = `<span class="${cls}">${sign}$${fmt(gain)}</span>`;
-        pctCell   = `<span class="${cls}">${sign}${pct.toFixed(2)}%</span>`;
-        valueCell = `$${fmt(value)}`;
+        const priceDiff = cp - uploadPrice;
+        const pct       = (priceDiff / uploadPrice) * 100;
+        const cls       = priceDiff >= 0 ? 'positive' : 'negative';
+        const sign      = priceDiff >= 0 ? '+' : '';
+        changeCell = `<span class="${cls}">${sign}$${fmt(priceDiff)} &nbsp;${sign}${pct.toFixed(2)}%</span>`;
+
         if (inv.dayChangePct !== undefined) {
           const dc = inv.dayChangePct;
           dayCell = `<span class="pill ${dc >= 0 ? 'positive' : 'negative'}">${dc >= 0 ? '+' : ''}${dc.toFixed(2)}%</span>`;
         }
       }
 
+      const dateLabel = inv.addedDate
+        ? new Date(inv.addedDate).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })
+        : '—';
+
       return `<tr>
         <td><span class="ticker-badge">${inv.ticker}</span></td>
         <td>${Number(inv.shares).toLocaleString()}</td>
-        <td>$${fmt(inv.purchasePrice)}</td>
+        <td>$${fmt(uploadPrice)}</td>
+        <td style="color:var(--muted);font-size:0.82rem;">${dateLabel}</td>
         <td>${cp !== undefined ? '$'+fmt(cp) : '<span class="loading">…</span>'}</td>
-        <td>${valueCell}</td>
-        <td>${gainCell} ${pctCell}</td>
+        <td>${changeCell}</td>
         <td>${dayCell}</td>
         <td>
           <button class="btn btn-danger" onclick="confirmRemove(${i})"
@@ -910,10 +914,14 @@
     container.innerHTML = `
       <table aria-label="Holdings">
         <thead><tr>
-          <th scope="col">Ticker</th><th scope="col">Shares</th>
-          <th scope="col">Avg Cost</th><th scope="col">Current</th>
-          <th scope="col">Value</th><th scope="col">Gain / Loss</th>
-          <th scope="col">Today</th><th scope="col"><span class="sr-only">Actions</span></th>
+          <th scope="col">Ticker</th>
+          <th scope="col">Shares</th>
+          <th scope="col">Upload Price</th>
+          <th scope="col">Added</th>
+          <th scope="col">Current</th>
+          <th scope="col">Change Since Upload</th>
+          <th scope="col">Today</th>
+          <th scope="col"><span class="sr-only">Actions</span></th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
@@ -1007,7 +1015,7 @@
     if (isNaN(purchasePrice) || purchasePrice <= 0) { setStatus('addStatus', 'Please enter a valid purchase price.', 'error'); return; }
     if (investments.some(i => i.ticker === ticker)) { setStatus('addStatus', `${ticker} is already in your portfolio.`, 'error'); return; }
 
-    investments.push({ ticker, shares, purchasePrice });
+    investments.push({ ticker, shares, purchasePrice, addedDate: new Date().toISOString() });
     document.getElementById('ticker').value        = '';
     document.getElementById('shares').value        = '';
     document.getElementById('purchasePrice').value = '';
@@ -1084,55 +1092,68 @@
     document.getElementById('ocrLabel').textContent = label;
   }
 
-  function parseHoldingsFromText(text) {
-    // Words that are never stock tickers
-    const SKIP = new Set([
-      'THE','AND','FOR','YOU','ARE','INC','LLC','ETF','USD','EUR','GBP',
-      'OF','IN','AT','IS','IT','OR','AS','BY','TO','PM','AM','EDT','EST',
-      'CST','PST','MDT','CDT','PDT','LAST','PRICE','CHANGE','SYMBOL',
-      'SHARES','VOLUME','CURRENCY','MARKET','TIME','DAY','HIGH','LOW',
-      'OPEN','CLOSE','BID','ASK','NAV','YTD','PRE','EXT','PNL'
-    ]);
+  // Words that should never be treated as tickers
+  const TICKER_SKIP = new Set([
+    'THE','AND','FOR','YOU','ARE','INC','LLC','ETF','USD','EUR','GBP','CAD',
+    'OF','IN','AT','IS','IT','OR','AS','BY','TO','PM','AM','EDT','EST',
+    'CST','PST','MDT','CDT','PDT','UTC','LAST','PRICE','CHANGE','SYMBOL',
+    'SHARES','VOLUME','CURRENCY','MARKET','TIME','DAY','HIGH','LOW',
+    'OPEN','CLOSE','BID','ASK','NAV','YTD','PRE','EXT','PNL','PER',
+    'JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','DEC',
+  ]);
 
+  function cleanLineNums(text) {
+    return text
+      .replace(/[+\-]?\d[\d,.]*%/g, '')           // strip percentages: +2.39%
+      .replace(/\d{1,2}:\d{2}\s*[AaPp][Mm]/g, '') // strip times: 12:49PM
+      .replace(/\b(EDT|EST|CST|PST|MDT|CDT|PDT|UTC|USD|EUR|GBP|CAD)\b/gi, '') // currency/tz
+      .replace(/\b\d+\.?\d*[MKBmkb]\b/g, '')      // strip volumes: 1.534M 78K
+      .replace(/,/g, '')                           // strip thousand separators
+      .replace(/\b[A-Z]{2,4}\b/g, '');            // strip remaining short caps (USD etc.)
+  }
+
+  function numsFrom(text) {
+    return [...cleanLineNums(text).matchAll(/\b(\d+\.?\d*)\b/g)]
+      .map(m => parseFloat(m[1]))
+      .filter(n => !isNaN(n) && n > 0 && n < 1_000_000);
+  }
+
+  function parseHoldingsFromText(text) {
+    const lines   = text.split('\n').map(l => l.trim()).filter(Boolean);
     const results = [];
     const seen    = new Set();
-    const lines   = text.split('\n').map(l => l.trim()).filter(Boolean);
 
-    for (const line of lines) {
-      // Must contain a valid ticker (1-5 uppercase letters, standalone word)
-      const tickerMatch = line.match(/(?:^|\s)([A-Z]{1,5})(?:\s|$)/);
-      if (!tickerMatch) continue;
-      const ticker = tickerMatch[1];
-      if (SKIP.has(ticker) || seen.has(ticker)) continue;
+    // Two-pass: first find every ticker + its line index,
+    // then look in a 3-line window for the associated numbers.
+    // This handles OCR splitting ticker and numbers onto different lines.
+    const tickerCandidates = [];
+    for (let i = 0; i < lines.length; i++) {
+      const caps = [...lines[i].matchAll(/\b([A-Z]{1,5})\b/g)].map(m => m[1]);
+      for (const t of caps) {
+        if (!TICKER_SKIP.has(t) && !seen.has(t)) {
+          tickerCandidates.push({ ticker: t, lineIdx: i });
+          seen.add(t); // avoid duplicates
+        }
+      }
+    }
 
-      // Strip noise: percentages, time, currency codes, volume suffixes
-      const cleaned = line
-        .replace(/[+\-]\d[\d,.]*%/g, '')          // +2.39%  -1.03%
-        .replace(/\d{1,2}:\d{2}\s*[AP]M/gi, '')   // 12:49PM
-        .replace(/\b(EDT|EST|CST|PST|MDT|CDT|PDT|UTC)\b/gi, '')
-        .replace(/\b[A-Z]{3}\b/g, '')             // USD EUR etc
-        .replace(/\b\d+\.?\d*[MKB]\b/gi, '')      // 1.534M  78K
-        .replace(/,/g, '');                        // remove thousand commas
-
-      // Collect remaining numbers
-      const nums = [...cleaned.matchAll(/\b(\d+\.?\d*)\b/g)]
-        .map(m => parseFloat(m[1]))
-        .filter(n => !isNaN(n) && n > 0 && n < 10_000_000);
+    for (const { ticker, lineIdx } of tickerCandidates) {
+      // Combine this line + the next line (OCR sometimes splits rows)
+      const window = lines.slice(lineIdx, Math.min(lineIdx + 2, lines.length)).join(' ');
+      const nums   = numsFrom(window);
 
       if (nums.length < 2) continue;
 
-      // Shares: whole numbers (or near-whole) — prefer the largest integer-looking value
-      const intNums = nums.filter(n => n === Math.floor(n));
-      const shares  = intNums.length ? Math.max(...intNums) : Math.round(nums[nums.length - 1]);
+      // Shares = LAST whole number in the line (Shares column is rightmost)
+      const intNums = nums.filter(n => Number.isInteger(n));
+      const shares  = intNums.length ? intNums[intNums.length - 1] : null;
+      if (!shares) continue;
 
-      // Price: the first decimal number (likely Last Price column)
-      const price   = nums.find(n => n !== shares && n.toString().includes('.')) || nums[0];
+      // Upload price = first decimal number that isn't the shares value
+      const uploadPrice = nums.find(n => n !== shares && String(n).includes('.'));
+      if (!uploadPrice) continue;
 
-      if (!shares || !price || shares === price) continue;
-
-      seen.add(ticker);
-      // purchasePrice is left null — user must fill it in (the screenshot shows current price, not cost basis)
-      results.push({ ticker, shares, currentPriceHint: price, purchasePrice: null });
+      results.push({ ticker, shares, uploadPrice });
     }
 
     return results.slice(0, 25);
@@ -1143,28 +1164,22 @@
     const rows  = document.getElementById('ocrRows');
 
     if (!detected.length) {
-      title.innerHTML = "We couldn't automatically detect holdings from this image.<br>Try a clearer screenshot or add them manually above.";
-      rows.innerHTML = '';
+      title.innerHTML = "We couldn't automatically detect holdings from this image.<br>Try a clearer, cropped screenshot of just the holdings table.";
+      rows.innerHTML  = '';
       document.getElementById('ocrConfirmBtn').style.display = 'none';
     } else {
-      title.innerHTML = `
-        ✅ Detected <strong>${detected.length} holding${detected.length > 1 ? 's' : ''}</strong> from your screenshot.
-        <br><span style="color:var(--yellow);font-size:0.8rem;">
-          ⚠️ Enter what <em>you paid</em> per share — the screenshot only shows today's price.
-        </span>`;
+      title.innerHTML = `✅ Detected <strong>${detected.length} holding${detected.length > 1 ? 's' : ''}</strong> — review and confirm:`;
       document.getElementById('ocrConfirmBtn').style.display = '';
 
       rows.innerHTML = detected.map((h, i) => `
         <div class="ocr-row" role="group" aria-label="Detected holding ${i+1}: ${h.ticker}">
-          <span class="ticker-badge" style="min-width:60px;text-align:center;">${h.ticker}</span>
+          <span class="ticker-badge" style="min-width:64px;text-align:center;">${h.ticker}</span>
           <span class="ocr-row-label">Shares</span>
           <input type="number" value="${h.shares}" id="ocrShares${i}" min="0" step="any"
             style="max-width:90px" aria-label="Shares of ${h.ticker}">
-          <span class="ocr-row-label">What you paid / share $</span>
-          <input type="number" id="ocrPrice${i}" min="0" step="any"
-            placeholder="${h.currentPriceHint ? 'e.g. ' + h.currentPriceHint.toFixed(2) : 'e.g. 150.00'}"
-            style="max-width:110px;border-color:var(--yellow);"
-            aria-label="Purchase price per share for ${h.ticker}">
+          <span class="ocr-row-label">Price at upload</span>
+          <input type="number" value="${h.uploadPrice.toFixed(2)}" id="ocrPrice${i}" min="0" step="any"
+            style="max-width:110px" aria-label="Price at upload for ${h.ticker}">
           <input type="hidden" id="ocrTicker${i}" value="${h.ticker}">
         </div>`).join('');
     }
@@ -1174,18 +1189,15 @@
   }
 
   function confirmOcrRows() {
-    let added = 0, skipped = 0;
+    let added = 0;
+    const today = new Date().toISOString();
     for (let i = 0; i < ocrDetected.length; i++) {
       const ticker = document.getElementById(`ocrTicker${i}`).value.trim().toUpperCase();
       const shares = parseFloat(document.getElementById(`ocrShares${i}`).value);
       const price  = parseFloat(document.getElementById(`ocrPrice${i}`).value);
-
-      if (!ticker) continue;
-      if (isNaN(price) || price <= 0) { skipped++; continue; } // price required
-      if (isNaN(shares) || shares <= 0) continue;
+      if (!ticker || isNaN(shares) || isNaN(price) || shares <= 0 || price <= 0) continue;
       if (investments.some(inv => inv.ticker === ticker)) continue;
-
-      investments.push({ ticker, shares, purchasePrice: price });
+      investments.push({ ticker, shares, purchasePrice: price, addedDate: today });
       added++;
     }
     cancelOcr();
@@ -1193,12 +1205,7 @@
       persist();
       renderTable();
       refreshPrices();
-      const msg = skipped
-        ? `Added ${added} holding${added > 1 ? 's' : ''}. ${skipped} skipped (no purchase price entered).`
-        : `Added ${added} holding${added > 1 ? 's' : ''} from photo.`;
-      toast(msg, 'success');
-    } else if (skipped) {
-      toast('Enter what you paid per share to add holdings.', 'error');
+      toast(`Added ${added} holding${added > 1 ? 's' : ''} from photo.`, 'success');
     } else {
       toast('No new holdings were added.', 'error');
     }
