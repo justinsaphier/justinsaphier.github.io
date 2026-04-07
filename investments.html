@@ -1085,30 +1085,57 @@
   }
 
   function parseHoldingsFromText(text) {
-    const lines   = text.split('\n').map(l => l.trim()).filter(Boolean);
+    // Words that are never stock tickers
+    const SKIP = new Set([
+      'THE','AND','FOR','YOU','ARE','INC','LLC','ETF','USD','EUR','GBP',
+      'OF','IN','AT','IS','IT','OR','AS','BY','TO','PM','AM','EDT','EST',
+      'CST','PST','MDT','CDT','PDT','LAST','PRICE','CHANGE','SYMBOL',
+      'SHARES','VOLUME','CURRENCY','MARKET','TIME','DAY','HIGH','LOW',
+      'OPEN','CLOSE','BID','ASK','NAV','YTD','PRE','EXT','PNL'
+    ]);
+
     const results = [];
-    const tickerRe = /\b([A-Z]{1,5})\b/g;
-    const numRe    = /\$?([\d,]+\.?\d*)/g;
+    const seen    = new Set();
+    const lines   = text.split('\n').map(l => l.trim()).filter(Boolean);
 
     for (const line of lines) {
-      const tickers = [...line.matchAll(tickerRe)].map(m => m[1]);
-      const nums    = [...line.matchAll(numRe)]
-        .map(m => parseFloat(m[1].replace(',', '')))
-        .filter(n => !isNaN(n) && n > 0);
+      // Must contain a valid ticker (1-5 uppercase letters, standalone word)
+      const tickerMatch = line.match(/(?:^|\s)([A-Z]{1,5})(?:\s|$)/);
+      if (!tickerMatch) continue;
+      const ticker = tickerMatch[1];
+      if (SKIP.has(ticker) || seen.has(ticker)) continue;
 
-      // Skip lines that are just common English words mistaken as tickers
-      const skip = new Set(['THE','AND','FOR','YOU','ARE','INC','LLC','ETF','USD','OF','IN','AT','IS','IT','OR','AS','BY','TO']);
-      const validTickers = tickers.filter(t => !skip.has(t) && t.length >= 1 && t.length <= 5);
+      // Strip noise: percentages, time, currency codes, volume suffixes
+      const cleaned = line
+        .replace(/[+\-]\d[\d,.]*%/g, '')          // +2.39%  -1.03%
+        .replace(/\d{1,2}:\d{2}\s*[AP]M/gi, '')   // 12:49PM
+        .replace(/\b(EDT|EST|CST|PST|MDT|CDT|PDT|UTC)\b/gi, '')
+        .replace(/\b[A-Z]{3}\b/g, '')             // USD EUR etc
+        .replace(/\b\d+\.?\d*[MKB]\b/gi, '')      // 1.534M  78K
+        .replace(/,/g, '');                        // remove thousand commas
 
-      if (validTickers.length === 1 && nums.length >= 2) {
-        results.push({
-          ticker: validTickers[0],
-          shares: nums[0],
-          purchasePrice: nums[1],
-        });
-      }
+      // Collect remaining numbers
+      const nums = [...cleaned.matchAll(/\b(\d+\.?\d*)\b/g)]
+        .map(m => parseFloat(m[1]))
+        .filter(n => !isNaN(n) && n > 0 && n < 10_000_000);
+
+      if (nums.length < 2) continue;
+
+      // Shares: whole numbers (or near-whole) — prefer the largest integer-looking value
+      const intNums = nums.filter(n => n === Math.floor(n));
+      const shares  = intNums.length ? Math.max(...intNums) : Math.round(nums[nums.length - 1]);
+
+      // Price: the first decimal number (likely Last Price column)
+      const price   = nums.find(n => n !== shares && n.toString().includes('.')) || nums[0];
+
+      if (!shares || !price || shares === price) continue;
+
+      seen.add(ticker);
+      // purchasePrice is left null — user must fill it in (the screenshot shows current price, not cost basis)
+      results.push({ ticker, shares, currentPriceHint: price, purchasePrice: null });
     }
-    return results.slice(0, 20); // cap at 20
+
+    return results.slice(0, 25);
   }
 
   function showOcrReview(detected) {
@@ -1116,24 +1143,29 @@
     const rows  = document.getElementById('ocrRows');
 
     if (!detected.length) {
-      title.textContent = "We couldn't automatically detect holdings. Fill in manually above.";
+      title.innerHTML = "We couldn't automatically detect holdings from this image.<br>Try a clearer screenshot or add them manually above.";
       rows.innerHTML = '';
       document.getElementById('ocrConfirmBtn').style.display = 'none';
     } else {
-      title.textContent = `We detected ${detected.length} holding${detected.length > 1 ? 's' : ''}. Review and confirm:`;
+      title.innerHTML = `
+        ✅ Detected <strong>${detected.length} holding${detected.length > 1 ? 's' : ''}</strong> from your screenshot.
+        <br><span style="color:var(--yellow);font-size:0.8rem;">
+          ⚠️ Enter what <em>you paid</em> per share — the screenshot only shows today's price.
+        </span>`;
       document.getElementById('ocrConfirmBtn').style.display = '';
+
       rows.innerHTML = detected.map((h, i) => `
-        <div class="ocr-row" role="group" aria-label="Detected holding ${i+1}">
-          <span class="ocr-row-label">Ticker</span>
-          <input type="text" value="${h.ticker}" id="ocrTicker${i}"
-            style="text-transform:uppercase;max-width:90px"
-            aria-label="Ticker symbol for holding ${i+1}">
+        <div class="ocr-row" role="group" aria-label="Detected holding ${i+1}: ${h.ticker}">
+          <span class="ticker-badge" style="min-width:60px;text-align:center;">${h.ticker}</span>
           <span class="ocr-row-label">Shares</span>
           <input type="number" value="${h.shares}" id="ocrShares${i}" min="0" step="any"
-            aria-label="Shares for holding ${i+1}">
-          <span class="ocr-row-label">Avg Price $</span>
-          <input type="number" value="${h.purchasePrice}" id="ocrPrice${i}" min="0" step="any"
-            aria-label="Purchase price for holding ${i+1}">
+            style="max-width:90px" aria-label="Shares of ${h.ticker}">
+          <span class="ocr-row-label">What you paid / share $</span>
+          <input type="number" id="ocrPrice${i}" min="0" step="any"
+            placeholder="${h.currentPriceHint ? 'e.g. ' + h.currentPriceHint.toFixed(2) : 'e.g. 150.00'}"
+            style="max-width:110px;border-color:var(--yellow);"
+            aria-label="Purchase price per share for ${h.ticker}">
+          <input type="hidden" id="ocrTicker${i}" value="${h.ticker}">
         </div>`).join('');
     }
 
@@ -1142,13 +1174,17 @@
   }
 
   function confirmOcrRows() {
-    let added = 0;
+    let added = 0, skipped = 0;
     for (let i = 0; i < ocrDetected.length; i++) {
       const ticker = document.getElementById(`ocrTicker${i}`).value.trim().toUpperCase();
       const shares = parseFloat(document.getElementById(`ocrShares${i}`).value);
       const price  = parseFloat(document.getElementById(`ocrPrice${i}`).value);
-      if (!ticker || isNaN(shares) || isNaN(price) || shares <= 0 || price <= 0) continue;
+
+      if (!ticker) continue;
+      if (isNaN(price) || price <= 0) { skipped++; continue; } // price required
+      if (isNaN(shares) || shares <= 0) continue;
       if (investments.some(inv => inv.ticker === ticker)) continue;
+
       investments.push({ ticker, shares, purchasePrice: price });
       added++;
     }
@@ -1157,7 +1193,12 @@
       persist();
       renderTable();
       refreshPrices();
-      toast(`Added ${added} holding${added > 1 ? 's' : ''} from photo.`, 'success');
+      const msg = skipped
+        ? `Added ${added} holding${added > 1 ? 's' : ''}. ${skipped} skipped (no purchase price entered).`
+        : `Added ${added} holding${added > 1 ? 's' : ''} from photo.`;
+      toast(msg, 'success');
+    } else if (skipped) {
+      toast('Enter what you paid per share to add holdings.', 'error');
     } else {
       toast('No new holdings were added.', 'error');
     }
