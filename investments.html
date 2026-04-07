@@ -929,25 +929,30 @@
   }
 
   // ── Prices ──────────────────────────────────────────────────────────────────
-  async function fetchPrice(ticker) {
-    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=2d`;
-    const proxies  = [
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`,
-      `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`,
-    ];
-    let lastErr;
-    for (const url of proxies) {
+  async function fetchPricesFromBackend(tickers) {
+    const res  = await fetch(`${API}/api/prices?tickers=${encodeURIComponent(tickers.join(','))}`, {
+      headers: authHeaders(),
+    });
+    if (!res.ok) throw new Error(`Backend ${res.status}`);
+    return await res.json(); // { AAPL: { price, dayChangePct }, ... }
+  }
+
+  async function fetchPricesDirect(tickers) {
+    // Direct Yahoo Finance — works when served over HTTP (Render / GitHub Pages)
+    const results = {};
+    await Promise.all(tickers.map(async ticker => {
       try {
+        const url  = `https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=2d`;
         const res  = await fetch(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) throw new Error(`Yahoo ${res.status}`);
         const data = await res.json();
         const meta = data.chart.result[0].meta;
         const price = meta.regularMarketPrice;
         const prev  = meta.chartPreviousClose ?? meta.previousClose ?? price;
-        return { price, dayChangePct: ((price - prev) / prev) * 100 };
-      } catch (e) { lastErr = e; }
-    }
-    throw lastErr;
+        results[ticker] = { price, dayChangePct: ((price - prev) / prev) * 100 };
+      } catch { /* leave ticker missing */ }
+    }));
+    return results;
   }
 
   async function refreshPrices() {
@@ -956,21 +961,35 @@
     btn.classList.add('spinning');
     btn.setAttribute('aria-busy', 'true');
     setStatus('priceStatus', 'Fetching prices…', '');
-    let anyFailed = false;
 
-    await Promise.all(investments.map(async inv => {
+    const tickers = investments.map(i => i.ticker);
+    let prices = {};
+
+    // Try backend first (no CORS issues), fall back to direct Yahoo Finance
+    try {
+      prices = await fetchPricesFromBackend(tickers);
+    } catch {
       try {
-        const { price, dayChangePct } = await fetchPrice(inv.ticker);
-        inv.currentPrice  = price;
-        inv.dayChangePct  = dayChangePct;
-      } catch { anyFailed = true; }
-    }));
+        prices = await fetchPricesDirect(tickers);
+      } catch { /* prices stays empty */ }
+    }
+
+    let anyFailed = false;
+    investments.forEach(inv => {
+      const p = prices[inv.ticker];
+      if (p) {
+        inv.currentPrice = p.price;
+        inv.dayChangePct = p.dayChangePct;
+      } else {
+        anyFailed = true;
+      }
+    });
 
     btn.classList.remove('spinning');
     btn.removeAttribute('aria-busy');
     renderTable();
     setStatus('priceStatus',
-      anyFailed ? 'Some prices could not be fetched.' : `Updated ${new Date().toLocaleTimeString()}`,
+      anyFailed ? 'Some prices could not be fetched — keep the server running for live prices.' : `Updated ${new Date().toLocaleTimeString()}`,
       anyFailed ? 'error' : 'success');
   }
 

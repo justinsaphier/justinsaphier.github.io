@@ -81,6 +81,12 @@ function fmt(n) {
 }
 
 function createTransporter() {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    throw new Error(
+      'Email is not configured. Add SMTP_HOST, SMTP_USER, and SMTP_PASS ' +
+      'to your .env file (or Render environment variables) to enable emails.'
+    );
+  }
   return nodemailer.createTransport({
     host:   process.env.SMTP_HOST,
     port:   parseInt(process.env.SMTP_PORT || '587'),
