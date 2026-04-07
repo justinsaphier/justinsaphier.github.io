@@ -279,6 +279,35 @@ app.post('/api/send-email', requireAuth, async (req, res) => {
   }
 });
 
+app.post('/api/send-alert', requireAuth, async (req, res) => {
+  const { ticker, currentPrice, targetPrice, direction } = req.body;
+  if (!ticker || !currentPrice || !targetPrice) return res.status(400).json({ error: 'Missing fields.' });
+  try {
+    const transporter = createTransporter();
+    const sign = direction === 'above' ? '▲' : '▼';
+    await transporter.sendMail({
+      from:    `"Investment Tracker" <${process.env.SMTP_USER}>`,
+      to:      req.user.email,
+      subject: `🔔 Price Alert: ${ticker} ${sign} $${currentPrice.toFixed(2)}`,
+      html: `<div style="font-family:sans-serif;background:#0d0f1a;color:#e2e8f0;padding:32px;border-radius:12px;max-width:480px;margin:0 auto;">
+        <h2 style="color:#60a5fa;margin-bottom:8px;">🔔 Price Alert Triggered</h2>
+        <p style="font-size:1.1rem;margin-bottom:20px;">
+          <strong style="color:#e2e8f0;">${ticker}</strong> has crossed your target price.
+        </p>
+        <table style="width:100%;border-collapse:collapse;">
+          <tr><td style="padding:10px;color:#5a6380;">Current Price</td><td style="padding:10px;font-weight:700;color:#4ade80;">$${currentPrice.toFixed(2)}</td></tr>
+          <tr><td style="padding:10px;color:#5a6380;">Your Target</td><td style="padding:10px;">$${targetPrice.toFixed(2)} (${direction})</td></tr>
+        </table>
+        <p style="margin-top:24px;font-size:11px;color:#5a6380;text-align:center;">Investment Tracker · Price Alert</p>
+      </div>`,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Alert email error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Prices (public, no auth required) ────────────────────────────────────────
 
 app.get('/api/prices', async (req, res) => {

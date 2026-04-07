@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Investment Tracker</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0d0f1a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Investments">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -429,6 +436,13 @@
     #toast.success { border-color: var(--green); color: var(--green); }
     #toast.error   { border-color: var(--red);   color: var(--red); }
 
+    /* ── Screen-reader only ─────────────────────────────────────── */
+    .sr-only {
+      position: absolute; width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+
     /* ── Responsive ─────────────────────────────────────────────── */
     @media (max-width: 480px) {
       .auth-card { padding: 28px 20px; }
@@ -533,14 +547,25 @@
     </div>
   </section>
 
+  <!-- Portfolio Chart -->
+  <section class="card" aria-labelledby="chartHeading" id="chartCard" style="display:none;">
+    <h2 class="card-title" id="chartHeading">Portfolio Value Over Time</h2>
+    <div style="position:relative;height:200px;">
+      <canvas id="portfolioChart" aria-label="Portfolio value over time chart"></canvas>
+    </div>
+  </section>
+
   <!-- Holdings -->
   <section class="card" aria-labelledby="holdingsHeading">
     <div class="section-header">
       <h2 class="card-title" id="holdingsHeading">Holdings</h2>
-      <button class="refresh-btn" id="refreshBtn" onclick="refreshPrices()"
-        aria-label="Refresh stock prices">
-        <span class="spin-icon" aria-hidden="true">↻</span> Refresh Prices
-      </button>
+      <div style="display:flex;align-items:center;gap:4px;">
+        <button class="refresh-btn" id="refreshBtn" onclick="refreshPrices()"
+          aria-label="Refresh stock prices">
+          <span class="spin-icon" aria-hidden="true">↻</span> Refresh Prices
+        </button>
+        <span id="autoRefreshBadge" style="font-size:0.75rem;color:#5a6380;margin-left:4px;" aria-live="polite"></span>
+      </div>
     </div>
     <div class="table-wrap">
       <div id="holdingsContainer">
@@ -639,8 +664,49 @@
     <div class="status-bar" id="emailStatus" aria-live="polite"></div>
   </section>
 
+  <!-- Watchlist -->
+  <section class="card" aria-labelledby="watchlistHeading">
+    <h2 class="card-title" id="watchlistHeading">Watchlist</h2>
+    <div style="display:flex;gap:8px;margin-bottom:14px;" role="group" aria-label="Add to watchlist">
+      <input type="text" id="watchlistTicker" placeholder="e.g. TSLA"
+        style="text-transform:uppercase;max-width:160px;"
+        aria-label="Stock ticker to watch"
+        onkeydown="if(event.key==='Enter') addToWatchlist()">
+      <button class="btn btn-ghost" onclick="addToWatchlist()" aria-label="Add ticker to watchlist">+ Watch</button>
+    </div>
+    <div class="table-wrap" id="watchlistContainer">
+      <div class="empty-state"><div class="e-icon" aria-hidden="true">👁</div><p>No stocks being watched. Add a ticker above.</p></div>
+    </div>
+    <div class="status-bar" id="watchlistStatus" aria-live="polite"></div>
+  </section>
+
 </div><!-- /container -->
 </div><!-- /appScreen -->
+
+<div id="alertModal" role="dialog" aria-modal="true" aria-labelledby="alertModalTitle"
+  style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:#161928;border:1px solid #2a2f4a;border-radius:14px;padding:28px;width:100%;max-width:360px;margin:16px;">
+    <h3 id="alertModalTitle" style="font-size:1rem;font-weight:700;margin-bottom:16px;">Set Price Alert</h3>
+    <div style="margin-bottom:8px;font-size:0.85rem;color:#5a6380;" id="alertModalSub"></div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label for="alertDirection">Alert me when price goes</label>
+      <select id="alertDirection" style="background:#1e2235;border:1px solid #2a2f4a;border-radius:8px;padding:10px 14px;color:#e2e8f0;font-size:0.95rem;width:100%;outline:none;">
+        <option value="above">Above target</option>
+        <option value="below">Below target</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:16px;">
+      <label for="alertTargetPrice">Target price ($)</label>
+      <input type="number" id="alertTargetPrice" placeholder="e.g. 200.00" min="0" step="any">
+    </div>
+    <input type="hidden" id="alertTickerHidden">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-success" onclick="saveAlert()" style="flex:1;">Set Alert</button>
+      <button class="btn btn-danger" id="removeAlertBtn" onclick="removeCurrentAlert()" style="display:none;">Remove Alert</button>
+      <button class="btn btn-ghost" onclick="closeAlertModal()">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <div id="toast" role="status" aria-live="polite"></div>
 
@@ -772,6 +838,7 @@
     document.getElementById('userEmailDisplay').setAttribute('aria-label', `Signed in as ${currentEmail}`);
     applyAvatar(localStorage.getItem('it_avatar'));
     loadInvestments();
+    setTimeout(startAutoRefresh, 2000);
   }
 
   function showAuth() {
@@ -781,6 +848,9 @@
   }
 
   function signOut() {
+    stopAutoRefresh();
+    portfolioHistory = []; watchlist = []; alerts = [];
+    if (portfolioChart) { portfolioChart.destroy(); portfolioChart = null; }
     token = null; currentEmail = null; investments = [];
     localStorage.removeItem('it_token');
     localStorage.removeItem('it_email');
@@ -812,6 +882,11 @@
     // Always load from local storage first (works without server)
     const users = getUsers();
     investments = (users[currentEmail]?.investments) || [];
+    loadHistory();
+    loadAlerts();
+    loadWatchlist();
+    renderWatchlist();
+    renderChart();
 
     // Try to sync from backend (optional)
     fetch(`${API}/api/me`, { headers: authHeaders() })
@@ -900,6 +975,13 @@
         ? new Date(inv.addedDate).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })
         : '—';
 
+      const hasAlert = alerts.some(a => a.ticker === inv.ticker && a.active);
+      const alertBtn = `<button class="btn btn-ghost" style="font-size:0.78rem;padding:5px 10px;position:relative;"
+        onclick="openAlertModal('${inv.ticker}', ${cp !== undefined ? cp : 'undefined'})"
+        aria-label="${hasAlert ? 'Edit' : 'Set'} price alert for ${inv.ticker}">
+        🔔${hasAlert ? '<span style="position:absolute;top:2px;right:2px;width:7px;height:7px;background:#facc15;border-radius:50%;"></span>' : ''}
+      </button>`;
+
       return `<tr>
         <td><span class="ticker-badge">${inv.ticker}</span></td>
         <td>${Number(inv.shares).toLocaleString()}</td>
@@ -909,6 +991,7 @@
         <td>${changeCell}</td>
         <td>${dayCell}</td>
         <td>
+          ${alertBtn}
           <button class="btn btn-danger" onclick="confirmRemove(${i})"
             aria-label="Remove ${inv.ticker} from portfolio">Remove</button>
         </td>
@@ -989,12 +1072,19 @@
       }
     });
 
+    if (!anyFailed) {
+      saveSnapshot();
+      await checkAlerts(prices);
+    }
+
     btn.classList.remove('spinning');
     btn.removeAttribute('aria-busy');
     renderTable();
     setStatus('priceStatus',
       anyFailed ? 'Some prices could not be fetched — keep the server running for live prices.' : `Updated ${new Date().toLocaleTimeString()}`,
       anyFailed ? 'error' : 'success');
+    startAutoRefresh();
+    if (watchlist.length) fetchWatchlistPrices();
   }
 
   // ── Summary ─────────────────────────────────────────────────────────────────
@@ -1356,6 +1446,331 @@
 
   function saveUsers(users) {
     localStorage.setItem('it_users', JSON.stringify(users));
+  }
+
+  // ── Portfolio Chart ──────────────────────────────────────────────────────────
+  let portfolioChart = null;
+  let portfolioHistory = [];
+
+  function loadHistory() {
+    const users = getUsers();
+    portfolioHistory = users[currentEmail]?.portfolioHistory || [];
+  }
+
+  function saveSnapshot() {
+    let totalValue = 0, allPriced = true;
+    investments.forEach(inv => {
+      if (inv.currentPrice !== undefined) totalValue += inv.shares * inv.currentPrice;
+      else allPriced = false;
+    });
+    if (!allPriced || !totalValue || investments.length === 0) return;
+
+    // Only save if value changed or it's been >10 min since last snapshot
+    const last = portfolioHistory[portfolioHistory.length - 1];
+    const now = Date.now();
+    if (last && Math.abs(last.value - totalValue) < 0.01 && now - last.ts < 600000) return;
+
+    portfolioHistory.push({ ts: now, value: totalValue });
+    if (portfolioHistory.length > 60) portfolioHistory = portfolioHistory.slice(-60);
+
+    const users = getUsers();
+    if (users[currentEmail]) {
+      users[currentEmail].portfolioHistory = portfolioHistory;
+      saveUsers(users);
+    }
+    renderChart();
+  }
+
+  function renderChart() {
+    const card = document.getElementById('chartCard');
+    if (portfolioHistory.length < 2) { card.style.display = 'none'; return; }
+    card.style.display = '';
+
+    const labels = portfolioHistory.map(p =>
+      new Date(p.ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    );
+    const values = portfolioHistory.map(p => p.value);
+    const first = values[0], last = values[values.length - 1];
+    const color = last >= first ? '#4ade80' : '#f87171';
+
+    const ctx = document.getElementById('portfolioChart').getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, 200);
+    grad.addColorStop(0, color.replace(')', ',0.2)').replace('rgb', 'rgba'));
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+
+    if (portfolioChart) portfolioChart.destroy();
+    portfolioChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{ data: values, borderColor: color, backgroundColor: grad, fill: true,
+          tension: 0.4, pointRadius: 3, pointBackgroundColor: color, borderWidth: 2 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: { grid: { color: '#2a2f4a' }, ticks: { color: '#5a6380', maxTicksLimit: 8 } },
+          y: { grid: { color: '#2a2f4a' }, ticks: { color: '#5a6380',
+            callback: v => '$' + v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+          }}
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: { backgroundColor: '#1e2235', borderColor: '#2a2f4a', borderWidth: 1,
+            titleColor: '#94a3b8', bodyColor: '#e2e8f0',
+            callbacks: { label: c => ' $' + c.raw.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+          }
+        }
+      }
+    });
+  }
+
+  // ── Price Alerts ─────────────────────────────────────────────────────────────
+  let alerts = [];
+
+  function loadAlerts() {
+    try { alerts = JSON.parse(localStorage.getItem('it_alerts') || '[]'); }
+    catch { alerts = []; }
+  }
+
+  function saveAlerts() {
+    localStorage.setItem('it_alerts', JSON.stringify(alerts));
+  }
+
+  function openAlertModal(ticker, currentPrice) {
+    document.getElementById('alertTickerHidden').value = ticker;
+    document.getElementById('alertModalSub').textContent =
+      `${ticker} · Current price: $${currentPrice !== undefined ? fmt(currentPrice) : '—'}`;
+    document.getElementById('alertTargetPrice').value = '';
+    document.getElementById('alertDirection').value = 'above';
+
+    const existing = alerts.find(a => a.ticker === ticker && a.active);
+    if (existing) {
+      document.getElementById('alertTargetPrice').value = existing.targetPrice;
+      document.getElementById('alertDirection').value = existing.direction;
+      document.getElementById('removeAlertBtn').style.display = '';
+    } else {
+      document.getElementById('removeAlertBtn').style.display = 'none';
+    }
+
+    document.getElementById('alertModal').style.display = 'flex';
+    setTimeout(() => document.getElementById('alertTargetPrice').focus(), 50);
+  }
+
+  function closeAlertModal() {
+    document.getElementById('alertModal').style.display = 'none';
+  }
+
+  function saveAlert() {
+    const ticker = document.getElementById('alertTickerHidden').value;
+    const targetPrice = parseFloat(document.getElementById('alertTargetPrice').value);
+    const direction = document.getElementById('alertDirection').value;
+    if (isNaN(targetPrice) || targetPrice <= 0) { toast('Enter a valid target price.', 'error'); return; }
+
+    alerts = alerts.filter(a => a.ticker !== ticker);
+    alerts.push({ ticker, targetPrice, direction, active: true });
+    saveAlerts();
+    closeAlertModal();
+    renderTable();
+    toast(`🔔 Alert set: ${ticker} ${direction} $${fmt(targetPrice)}`, 'success');
+  }
+
+  function removeCurrentAlert() {
+    const ticker = document.getElementById('alertTickerHidden').value;
+    alerts = alerts.filter(a => a.ticker !== ticker);
+    saveAlerts();
+    closeAlertModal();
+    renderTable();
+    toast(`Alert removed for ${ticker}`);
+  }
+
+  async function checkAlerts(prices) {
+    let anyTriggered = false;
+    for (const alert of alerts) {
+      if (!alert.active) continue;
+      const p = prices[alert.ticker];
+      if (!p) continue;
+      const hit = alert.direction === 'above' ? p.price >= alert.targetPrice : p.price <= alert.targetPrice;
+      if (!hit) continue;
+
+      alert.active = false;
+      anyTriggered = true;
+      toast(`🔔 ${alert.ticker} hit $${fmt(p.price)}!`, 'success');
+      try {
+        await fetch(`${API}/api/send-alert`, {
+          method: 'POST', headers: authHeaders(),
+          body: JSON.stringify({ ticker: alert.ticker, currentPrice: p.price,
+            targetPrice: alert.targetPrice, direction: alert.direction }),
+        });
+      } catch {}
+    }
+    if (anyTriggered) { saveAlerts(); renderTable(); }
+  }
+
+  // ── Watchlist ─────────────────────────────────────────────────────────────────
+  let watchlist = [];
+
+  function loadWatchlist() {
+    const users = getUsers();
+    watchlist = (users[currentEmail]?.watchlist || []).map(w => ({ ticker: w.ticker }));
+  }
+
+  function saveWatchlist() {
+    const users = getUsers();
+    if (users[currentEmail]) {
+      users[currentEmail].watchlist = watchlist.map(({ ticker }) => ({ ticker }));
+      saveUsers(users);
+    }
+  }
+
+  function addToWatchlist() {
+    const ticker = document.getElementById('watchlistTicker').value.trim().toUpperCase();
+    if (!ticker || !/^[A-Z]{1,5}$/.test(ticker)) { toast('Enter a valid ticker (1–5 letters).', 'error'); return; }
+    if (watchlist.some(w => w.ticker === ticker)) { toast(`${ticker} is already on your watchlist.`, 'error'); return; }
+    watchlist.push({ ticker });
+    document.getElementById('watchlistTicker').value = '';
+    saveWatchlist();
+    renderWatchlist();
+    fetchWatchlistPrices();
+    toast(`Watching ${ticker}`, 'success');
+  }
+
+  function removeFromWatchlist(i) {
+    const ticker = watchlist[i].ticker;
+    watchlist.splice(i, 1);
+    saveWatchlist();
+    renderWatchlist();
+    toast(`Removed ${ticker} from watchlist`);
+  }
+
+  function addFromWatchlist(i) {
+    const w = watchlist[i];
+    document.getElementById('ticker').value = w.ticker;
+    document.getElementById('purchasePrice').value = w.currentPrice ? w.currentPrice.toFixed(2) : '';
+    document.getElementById('shares').focus();
+    document.getElementById('addHeading').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    toast(`Fill in shares for ${w.ticker}`, 'success');
+  }
+
+  function renderWatchlist() {
+    const container = document.getElementById('watchlistContainer');
+    if (!watchlist.length) {
+      container.innerHTML = `<div class="empty-state"><div class="e-icon" aria-hidden="true">👁</div><p>Add tickers above to track prices without owning them.</p></div>`;
+      return;
+    }
+    const rows = watchlist.map((w, i) => {
+      const priceCell = w.currentPrice !== undefined ? `$${fmt(w.currentPrice)}` : '<span class="loading">…</span>';
+      let dayCell = '—';
+      if (w.dayChangePct !== undefined) {
+        const dc = w.dayChangePct;
+        dayCell = `<span class="pill ${dc >= 0 ? 'positive' : 'negative'}">${dc >= 0 ? '+' : ''}${dc.toFixed(2)}%</span>`;
+      }
+      return `<tr>
+        <td><span class="ticker-badge">${w.ticker}</span></td>
+        <td>${priceCell}</td>
+        <td>${dayCell}</td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap;padding:12px 10px;">
+          <button class="btn btn-success" style="font-size:0.78rem;padding:5px 10px;"
+            onclick="addFromWatchlist(${i})" aria-label="Add ${w.ticker} to portfolio">+ Portfolio</button>
+          <button class="btn btn-danger" onclick="removeFromWatchlist(${i})"
+            aria-label="Remove ${w.ticker} from watchlist">Remove</button>
+        </td>
+      </tr>`;
+    }).join('');
+    container.innerHTML = `
+      <table aria-label="Watchlist">
+        <thead><tr>
+          <th scope="col">Ticker</th><th scope="col">Current Price</th>
+          <th scope="col">Today</th><th scope="col"><span class="sr-only">Actions</span></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  async function fetchWatchlistPrices() {
+    if (!watchlist.length) return;
+    const tickers = watchlist.map(w => w.ticker);
+    let prices = {};
+    try { prices = await fetchPricesFromBackend(tickers); }
+    catch { try { prices = await fetchPricesDirect(tickers); } catch {} }
+    watchlist.forEach(w => {
+      const p = prices[w.ticker];
+      if (p) { w.currentPrice = p.price; w.dayChangePct = p.dayChangePct; }
+    });
+    renderWatchlist();
+  }
+
+  // ── Auto-refresh ──────────────────────────────────────────────────────────────
+  let autoRefreshTimer = null;
+  let countdownTimer  = null;
+  let secondsLeft     = 60;
+
+  function isMarketOpen() {
+    const etStr = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+    const et    = new Date(etStr);
+    const day   = et.getDay(); // 0=Sun 6=Sat
+    if (day === 0 || day === 6) return false;
+    const mins  = et.getHours() * 60 + et.getMinutes();
+    return mins >= 9 * 60 + 30 && mins < 16 * 60;
+  }
+
+  function marketStatus() {
+    const etStr = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+    const et    = new Date(etStr);
+    const day   = et.getDay();
+    if (day === 0 || day === 6) return 'Weekend';
+    const mins  = et.getHours() * 60 + et.getMinutes();
+    if (mins < 9 * 60 + 30)  return 'Pre-market';
+    if (mins >= 16 * 60)      return 'After-hours';
+    return 'open';
+  }
+
+  function startAutoRefresh() {
+    stopAutoRefresh();
+    if (!investments.length && !watchlist.length) return;
+    const status = marketStatus();
+    if (status !== 'open') {
+      setBadge(status === 'Weekend' ? '📅 Weekend' : status === 'Pre-market' ? '⏰ Pre-market' : '🌙 After-hours');
+      return;
+    }
+    secondsLeft = 60;
+    setBadge(`Auto: ${secondsLeft}s`);
+    countdownTimer = setInterval(() => {
+      secondsLeft--;
+      if (secondsLeft > 0) setBadge(`Auto: ${secondsLeft}s`);
+    }, 1000);
+    autoRefreshTimer = setInterval(async () => {
+      if (marketStatus() !== 'open') { stopAutoRefresh(); startAutoRefresh(); return; }
+      secondsLeft = 60;
+      if (investments.length) refreshPrices();
+      if (watchlist.length)   fetchWatchlistPrices();
+    }, 60000);
+  }
+
+  function stopAutoRefresh() {
+    clearInterval(autoRefreshTimer);
+    clearInterval(countdownTimer);
+    autoRefreshTimer = countdownTimer = null;
+  }
+
+  function setBadge(text) {
+    const b = document.getElementById('autoRefreshBadge');
+    if (b) b.textContent = text;
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopAutoRefresh();
+    else if (investments.length || watchlist.length) startAutoRefresh();
+  });
+
+  // Close alert modal on backdrop click
+  document.getElementById('alertModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('alertModal')) closeAlertModal();
+  });
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
   }
 
   // ── Init ─────────────────────────────────────────────────────────────────────

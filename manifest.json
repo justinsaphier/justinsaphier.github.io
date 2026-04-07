@@ -1,0 +1,13 @@
+{
+  "name": "Investment Tracker",
+  "short_name": "Investments",
+  "description": "Track your portfolio with live prices and daily email alerts",
+  "start_url": "/investments.html",
+  "display": "standalone",
+  "background_color": "#0d0f1a",
+  "theme_color": "#0d0f1a",
+  "icons": [
+    { "src": "https://fav.farm/📈", "sizes": "192x192", "type": "image/png" },
+    { "src": "https://fav.farm/📈", "sizes": "512x512", "type": "image/png" }
+  ]
+}
