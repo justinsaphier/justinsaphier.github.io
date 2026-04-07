@@ -22,3 +22,5 @@ services:
         sync: false
       - key: SMTP_PASS
         sync: false
+      - key: MONGODB_URI
+        sync: false

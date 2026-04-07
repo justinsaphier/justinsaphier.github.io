@@ -892,14 +892,34 @@
     fetch(`${API}/api/me`, { headers: authHeaders() })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data?.investments?.length) {
+        if (!data) return;
+        let changed = false;
+
+        if (data.investments?.length) {
           investments = data.investments;
+          changed = true;
+        }
+        if (data.portfolioHistory?.length) {
+          portfolioHistory = data.portfolioHistory;
+          changed = true;
+        }
+        if (data.watchlist?.length) {
+          watchlist = data.watchlist.map(w => ({ ticker: w.ticker }));
+          renderWatchlist();
+          fetchWatchlistPrices();
+          changed = true;
+        }
+
+        if (changed) {
           const users = getUsers();
           if (users[currentEmail]) {
             users[currentEmail].investments = investments;
+            users[currentEmail].portfolioHistory = portfolioHistory;
+            users[currentEmail].watchlist = watchlist.map(w => ({ ticker: w.ticker }));
             saveUsers(users);
           }
           renderTable();
+          renderChart();
           if (investments.length) refreshPrices();
         }
       }).catch(() => {});
@@ -928,7 +948,9 @@
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
-        investments: investments.map(({ ticker, shares, purchasePrice }) => ({ ticker, shares, purchasePrice }))
+        investments:      investments.map(({ ticker, shares, purchasePrice, addedDate }) => ({ ticker, shares, purchasePrice, addedDate })),
+        portfolioHistory: portfolioHistory || [],
+        watchlist:        (watchlist || []).map(({ ticker }) => ({ ticker })),
       }),
     }).catch(() => {});
   }

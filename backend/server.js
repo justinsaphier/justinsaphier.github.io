@@ -8,13 +8,10 @@ const YahooFinance = require('yahoo-finance2').default;
 const yahoo = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
-const fs         = require('fs');
-const path       = require('path');
 
 const app      = express();
 const PORT     = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret-in-production';
-const USERS_FILE = path.join(__dirname, 'users.json');
 
 app.use(cors({
   origin: (origin, cb) => cb(null, true), // allow all origins (public API)
@@ -22,32 +19,64 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 
-// ── User storage ──────────────────────────────────────────────────────────────
-// { "email": { passwordHash, investments: [], createdAt } }
+// ── MongoDB connection ────────────────────────────────────────────────────────
+const mongoose = require('mongoose');
 
-function loadUsers() {
-  if (!fs.existsSync(USERS_FILE)) return {};
-  try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); }
-  catch { return {}; }
+const userSchema = new mongoose.Schema({
+  email:          { type: String, required: true, unique: true, lowercase: true },
+  passwordHash:   { type: String, required: true },
+  investments:    { type: Array,  default: [] },
+  portfolioHistory: { type: Array, default: [] },
+  watchlist:      { type: Array,  default: [] },
+  createdAt:      { type: Date,   default: Date.now },
+});
+const User = mongoose.model('User', userSchema);
+
+async function connectDB() {
+  if (!process.env.MONGODB_URI) {
+    console.warn('⚠ MONGODB_URI not set — user data will not persist across restarts.');
+    return false;
+  }
+  try {
+    await mongoose.connect(process.env.MONGODB_URI);
+    console.log('✓ MongoDB connected');
+    return true;
+  } catch (err) {
+    console.error('✗ MongoDB connection failed:', err.message);
+    return false;
+  }
 }
 
-function saveUsers(users) {
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+// In-memory fallback when MongoDB is unavailable
+const memStore = {};
+let useDB = false;
+
+async function getUser(email) {
+  if (useDB) return await User.findOne({ email: email.toLowerCase() });
+  return memStore[email.toLowerCase()] || null;
 }
 
-function getUser(email) {
-  return loadUsers()[email.toLowerCase()] || null;
+async function upsertUser(email, data) {
+  const key = email.toLowerCase();
+  if (useDB) {
+    return await User.findOneAndUpdate(
+      { email: key },
+      { $set: data },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+  }
+  memStore[key] = { ...(memStore[key] || {}), ...data, email: key };
+  return memStore[key];
 }
 
-function upsertUser(email, data) {
-  const users = loadUsers();
-  users[email.toLowerCase()] = { ...(users[email.toLowerCase()] || {}), ...data };
-  saveUsers(users);
+async function getAllUsers() {
+  if (useDB) return await User.find({});
+  return Object.values(memStore);
 }
 
 // ── Auth middleware ───────────────────────────────────────────────────────────
 
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
   const token  = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'Not authenticated.' });
@@ -229,10 +258,10 @@ app.post('/api/register', async (req, res) => {
   if (password.length < 8)  return res.status(400).json({ error: 'Password must be at least 8 characters.' });
 
   const key = email.toLowerCase();
-  if (getUser(key)) return res.status(409).json({ error: 'An account with this email already exists.' });
+  if (await getUser(key)) return res.status(409).json({ error: 'An account with this email already exists.' });
 
   const passwordHash = await bcrypt.hash(password, 12);
-  upsertUser(key, { passwordHash, investments: [], createdAt: new Date().toISOString() });
+  await upsertUser(key, { passwordHash, investments: [], portfolioHistory: [], watchlist: [], createdAt: new Date() });
 
   const token = jwt.sign({ email: key }, JWT_SECRET, { expiresIn: '30d' });
   res.json({ ok: true, token, email: key });
@@ -243,7 +272,7 @@ app.post('/api/login', async (req, res) => {
   if (!email || !password) return res.status(400).json({ error: 'Email and password are required.' });
 
   const key  = email.toLowerCase();
-  const user = getUser(key);
+  const user = await getUser(key);
   if (!user) return res.status(401).json({ error: 'No account found with that email.' });
 
   const match = await bcrypt.compare(password, user.passwordHash);
@@ -255,22 +284,30 @@ app.post('/api/login', async (req, res) => {
 
 // ── Data routes (auth required) ───────────────────────────────────────────────
 
-app.get('/api/me', requireAuth, (req, res) => {
-  const user = getUser(req.user.email);
+app.get('/api/me', requireAuth, async (req, res) => {
+  const user = await getUser(req.user.email);
   if (!user) return res.status(404).json({ error: 'User not found.' });
-  res.json({ email: req.user.email, investments: user.investments || [] });
+  res.json({
+    email: req.user.email,
+    investments:      user.investments      || [],
+    portfolioHistory: user.portfolioHistory || [],
+    watchlist:        user.watchlist        || [],
+  });
 });
 
-app.post('/api/data', requireAuth, (req, res) => {
-  const { investments } = req.body;
+app.post('/api/data', requireAuth, async (req, res) => {
+  const { investments, portfolioHistory, watchlist } = req.body;
   if (!Array.isArray(investments)) return res.status(400).json({ error: 'investments must be an array.' });
-  upsertUser(req.user.email, { investments });
+  const update = { investments };
+  if (Array.isArray(portfolioHistory)) update.portfolioHistory = portfolioHistory;
+  if (Array.isArray(watchlist))        update.watchlist = watchlist;
+  await upsertUser(req.user.email, update);
   res.json({ ok: true });
 });
 
 app.post('/api/send-email', requireAuth, async (req, res) => {
   try {
-    const user = getUser(req.user.email);
+    const user = await getUser(req.user.email);
     if (!user?.investments?.length) return res.status(400).json({ error: 'Add investments first.' });
     const result = await sendPortfolioEmail(req.user.email, user.investments);
     res.json({ ok: true, ...result });
@@ -329,8 +366,9 @@ app.get('/api/prices', async (req, res) => {
 
 cron.schedule('0 8 * * 1-5', async () => {
   console.log('Running daily email cron...');
-  const users = loadUsers();
-  for (const [email, user] of Object.entries(users)) {
+  const users = await getAllUsers();
+  for (const user of users) {
+    const email = user.email;
     if (!user.investments?.length) continue;
     try {
       await sendPortfolioEmail(email, user.investments);
@@ -342,7 +380,10 @@ cron.schedule('0 8 * * 1-5', async () => {
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  console.log('Daily emails scheduled for 8:00 AM ET on weekdays.');
+connectDB().then(connected => {
+  useDB = connected;
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+    console.log('Daily emails scheduled for 8:00 AM ET on weekdays.');
+  });
 });
