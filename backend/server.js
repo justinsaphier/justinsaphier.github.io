@@ -358,6 +358,10 @@ app.get('/api/prices', async (req, res) => {
   try {
     const prices = await fetchPrices(tickers);
     console.log('Prices result:', prices);
+    // If nothing came back, return errors so client knows what failed
+    if (Object.keys(prices).length === 0) {
+      return res.status(500).json({ error: 'All price lookups failed — Yahoo Finance may be blocking this server IP. Check Render logs.' });
+    }
     res.json(prices);
   } catch (err) {
     console.error('Price fetch error:', err.message);
