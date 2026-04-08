@@ -1,0 +1,15 @@
+name: Keep Server Alive
+
+on:
+  schedule:
+    - cron: '*/14 * * * *'  # Every 14 minutes, all day, every day
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping server
+        run: |
+          curl -s --max-time 30 \
+            "https://justinsaphier-investment-tracker.onrender.com/api/ping" \
+            && echo " ✓ Server is alive"

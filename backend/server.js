@@ -356,8 +356,34 @@ app.post('/api/send-alert', requireAuth, async (req, res) => {
   }
 });
 
-// ── Keep-alive ping (used by cron-job.org to prevent Render sleep) ───────────
+// ── Keep-alive ping ───────────────────────────────────────────────────────────
 app.get('/api/ping', (req, res) => res.json({ ok: true, ts: Date.now() }));
+
+// ── GitHub Actions cron trigger for daily emails ──────────────────────────────
+app.post('/api/cron-emails', async (req, res) => {
+  const secret = req.headers['x-cron-secret'];
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const users = await getAllUsers();
+    let sent = 0, skipped = 0;
+    for (const user of users) {
+      if (!user.investments?.length) { skipped++; continue; }
+      try {
+        await sendPortfolioEmail(user.email, user.investments);
+        sent++;
+      } catch (err) {
+        console.error(`Email failed for ${user.email}:`, err.message);
+      }
+    }
+    console.log(`Daily emails: ${sent} sent, ${skipped} skipped`);
+    res.json({ ok: true, sent, skipped });
+  } catch (err) {
+    console.error('Cron email error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ── Prices (public, no auth required) ────────────────────────────────────────
 

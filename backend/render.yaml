@@ -24,3 +24,5 @@ services:
         sync: false
       - key: MONGODB_URI
         sync: false
+      - key: CRON_SECRET
+        sync: false

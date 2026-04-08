@@ -1,0 +1,27 @@
+name: Daily Portfolio Email
+
+on:
+  schedule:
+    - cron: '0 13 * * 1-5'  # 8:00 AM ET (13:00 UTC) Monday–Friday
+  workflow_dispatch:          # Allow manual trigger from GitHub UI
+
+jobs:
+  send-emails:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake server and send daily emails
+        run: |
+          echo "Triggering daily portfolio emails at $(date)..."
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "https://justinsaphier-investment-tracker.onrender.com/api/cron-emails" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --max-time 60)
+          BODY=$(echo "$RESPONSE" | head -n1)
+          STATUS=$(echo "$RESPONSE" | tail -n1)
+          echo "Status: $STATUS"
+          echo "Response: $BODY"
+          if [ "$STATUS" != "200" ]; then
+            echo "ERROR: Email job failed with status $STATUS"
+            exit 1
+          fi
