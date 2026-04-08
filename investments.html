@@ -907,35 +907,37 @@
     renderWatchlist();
     renderChart();
 
-    // Try to sync from backend (optional)
+    // Sync with backend — server is authoritative, but if server is empty
+    // and we have local data, push local data up (first-time sync from old device)
     fetch(`${API}/api/me`, { headers: authHeaders() })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (!data) return;
-        let changed = false;
 
-        if (data.investments?.length) {
-          investments = data.investments;
-          changed = true;
+        const serverHasData = data.investments?.length || data.portfolioHistory?.length || data.watchlist?.length;
+        const localHasData  = investments.length || portfolioHistory.length || watchlist.length;
+
+        if (!serverHasData && localHasData) {
+          // Server is empty but we have local data — push it up now
+          persist();
+          return;
         }
-        if (data.portfolioHistory?.length) {
-          portfolioHistory = data.portfolioHistory;
-          changed = true;
-        }
+
+        let changed = false;
+        if (data.investments?.length)    { investments     = data.investments; changed = true; }
+        if (data.portfolioHistory?.length) { portfolioHistory = data.portfolioHistory; changed = true; }
         if (data.watchlist?.length) {
           watchlist = data.watchlist.map(w => ({ ticker: w.ticker }));
-          renderWatchlist();
-          fetchWatchlistPrices();
-          changed = true;
+          renderWatchlist(); fetchWatchlistPrices(); changed = true;
         }
 
         if (changed) {
-          const users = getUsers();
-          if (users[currentEmail]) {
-            users[currentEmail].investments = investments;
-            users[currentEmail].portfolioHistory = portfolioHistory;
-            users[currentEmail].watchlist = watchlist.map(w => ({ ticker: w.ticker }));
-            saveUsers(users);
+          const u = getUsers();
+          if (u[currentEmail]) {
+            u[currentEmail].investments     = investments;
+            u[currentEmail].portfolioHistory = portfolioHistory;
+            u[currentEmail].watchlist        = watchlist.map(w => ({ ticker: w.ticker }));
+            saveUsers(u);
           }
           renderTable();
           renderChart();
