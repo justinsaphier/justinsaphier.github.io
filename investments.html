@@ -661,6 +661,9 @@
     <button class="btn btn-email" onclick="sendTestEmail()" aria-label="Send a test portfolio email now">
       ✉ Send Test Email Now
     </button>
+    <button class="btn btn-ghost" style="width:100%;margin-top:10px;" onclick="forceSyncToCloud()" id="syncBtn">
+      ☁ Sync Holdings to Cloud
+    </button>
     <div class="status-bar" id="emailStatus" aria-live="polite"></div>
   </section>
 
@@ -966,13 +969,16 @@
     const users = getUsers();
     if (users[currentEmail]) {
       users[currentEmail].investments = investments.map(
-        ({ ticker, shares, purchasePrice }) => ({ ticker, shares, purchasePrice })
+        ({ ticker, shares, purchasePrice, addedDate }) => ({ ticker, shares, purchasePrice, addedDate })
       );
       saveUsers(users);
     }
+    // Sync to backend
+    syncToCloud().catch(() => {});
+  }
 
-    // Silently sync to backend if available (needed for scheduled emails)
-    fetch(`${API}/api/data`, {
+  async function syncToCloud() {
+    const res = await fetch(`${API}/api/data`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
@@ -980,7 +986,31 @@
         portfolioHistory: portfolioHistory || [],
         watchlist:        (watchlist || []).map(({ ticker }) => ({ ticker })),
       }),
-    }).catch(() => {});
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d.error || `Server error ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async function forceSyncToCloud() {
+    if (!investments.length) { toast('No holdings to sync.', 'error'); return; }
+    const btn = document.getElementById('syncBtn');
+    btn.disabled = true;
+    btn.textContent = '☁ Syncing…';
+    setStatus('emailStatus', 'Syncing holdings to cloud…', '');
+    try {
+      await syncToCloud();
+      setStatus('emailStatus', `✓ ${investments.length} holdings synced to cloud. Sign in on any device to see them.`, 'success');
+      toast('Holdings synced to cloud!', 'success');
+    } catch (err) {
+      setStatus('emailStatus', `Sync failed: ${err.message}`, 'error');
+      toast('Sync failed — check your connection.', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '☁ Sync Holdings to Cloud';
+    }
   }
 
   // ── Render table ─────────────────────────────────────────────────────────────
