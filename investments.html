@@ -791,36 +791,55 @@
     btn.textContent = isRegister ? 'Creating account…' : 'Signing in…';
 
     try {
-      const key   = emailVal.toLowerCase();
-      const hash  = await hashPassword(passVal);
-      const users = getUsers();
+      const key = emailVal.toLowerCase();
 
-      if (isRegister) {
-        if (users[key]) throw new Error('An account with this email already exists.');
-        users[key] = { passwordHash: hash, investments: [] };
-        saveUsers(users);
-      } else {
-        if (!users[key]) throw new Error('No account found with that email.');
-        if (users[key].passwordHash !== hash) throw new Error('Incorrect password.');
-      }
-
-      currentEmail = key;
-      token        = btoa(key + ':' + Date.now());
-      localStorage.setItem('it_token', token);
-      localStorage.setItem('it_email', currentEmail);
-
-      // Silently try to sync with backend (optional — needed only for emails)
-      fetch(`${API}/api/${isRegister ? 'register' : 'login'}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: key, password: passVal }),
-      }).then(r => r.json()).then(d => {
-        if (d.token) {
+      // ── Try backend first (works across all devices) ──────────────────────
+      let backendOk = false;
+      try {
+        const r = await fetch(`${API}/api/${isRegister ? 'register' : 'login'}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: key, password: passVal }),
+        });
+        const d = await r.json();
+        if (r.ok && d.token) {
           token = d.token;
           localStorage.setItem('it_token', token);
+          backendOk = true;
+        } else if (!r.ok) {
+          // Backend returned a real error (wrong password, duplicate email, etc.)
+          throw new Error(d.error || 'Authentication failed.');
         }
-      }).catch(() => {}); // backend offline is fine
+      } catch (err) {
+        // Only re-throw if it's a real auth error (4xx), not a network error
+        if (err.message !== 'Failed to fetch' && !err.message.includes('NetworkError')) {
+          throw err;
+        }
+        // Backend unreachable — fall back to local auth
+      }
 
+      // ── Fall back to local auth if backend is offline ─────────────────────
+      if (!backendOk) {
+        const hash  = await hashPassword(passVal);
+        const users = getUsers();
+        if (isRegister) {
+          if (users[key]) throw new Error('An account with this email already exists.');
+          users[key] = { passwordHash: hash, investments: [] };
+          saveUsers(users);
+        } else {
+          if (!users[key]) throw new Error('No account found with that email.');
+          if (users[key].passwordHash !== hash) throw new Error('Incorrect password.');
+        }
+        token = btoa(key + ':' + Date.now());
+        localStorage.setItem('it_token', token);
+      }
+
+      // ── Cache email locally and enter app ────────────────────────────────
+      const hash = await hashPassword(passVal);
+      const users = getUsers();
+      if (!users[key]) { users[key] = { passwordHash: hash, investments: [] }; saveUsers(users); }
+      currentEmail = key;
+      localStorage.setItem('it_email', currentEmail);
       showApp();
     } catch (err) {
       document.getElementById('authError').textContent = err.message;
