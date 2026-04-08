@@ -3,9 +3,7 @@ const express    = require('express');
 const cors       = require('cors');
 const cron       = require('node-cron');
 const nodemailer = require('nodemailer');
-// yahoo-finance2 v3: .default is the class, must be instantiated
-const YahooFinance = require('yahoo-finance2').default;
-const yahoo = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+// Stock prices fetched directly via Yahoo Finance HTTP API (no npm package needed)
 const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
 
@@ -92,11 +90,16 @@ async function requireAuth(req, res, next) {
 
 async function fetchNews(ticker) {
   try {
-    const result = await yahoo.search(ticker, { newsCount: 3, enableFuzzyQuery: false });
-    return (result.news || [])
-      .slice(0, 3)
-      .map(n => n.title)
-      .filter(Boolean);
+    const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(ticker)}&newsCount=3&enableFuzzyQuery=false`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+      }
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data?.news || []).slice(0, 3).map(n => n.title).filter(Boolean);
   } catch {
     return [];
   }
@@ -106,14 +109,22 @@ async function fetchPrices(tickers) {
   const results = {};
   await Promise.all(tickers.map(async (ticker) => {
     try {
-      const q = await yahoo.quote(ticker, {}, { validateResult: false });
-      const price     = q.regularMarketPrice ?? q.ask ?? q.bid;
-      const prevClose = q.regularMarketPreviousClose ?? q.previousClose ?? price;
-      if (!price) throw new Error('No price returned');
-      results[ticker] = {
-        price,
-        dayChangePct: prevClose ? ((price - prevClose) / prevClose) * 100 : 0,
-      };
+      const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=2d`;
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/json',
+          'Accept-Language': 'en-US,en;q=0.9',
+        }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const meta  = data?.chart?.result?.[0]?.meta;
+      if (!meta) throw new Error('No data returned');
+      const price = meta.regularMarketPrice;
+      const prev  = meta.chartPreviousClose ?? meta.previousClose ?? price;
+      if (!price) throw new Error('No price in response');
+      results[ticker] = { price, dayChangePct: prev ? ((price - prev) / prev) * 100 : 0 };
       console.log(`✓ ${ticker}: $${price}`);
     } catch (err) {
       console.error(`✗ fetchPrices ${ticker}: ${err.message}`);
