@@ -1102,9 +1102,12 @@
     btn.classList.remove('spinning');
     btn.removeAttribute('aria-busy');
     renderTable();
+    const fetchedCount = investments.filter(i => i.currentPrice !== undefined).length;
     setStatus('priceStatus',
-      anyFailed ? 'Some prices could not be fetched — keep the server running for live prices.' : `Updated ${new Date().toLocaleTimeString()}`,
-      anyFailed ? 'error' : 'success');
+      anyFailed && fetchedCount === 0 ? 'Could not fetch prices. Check your connection.' :
+      anyFailed ? `Updated ${new Date().toLocaleTimeString()} · ${fetchedCount}/${investments.length} prices loaded` :
+      `Updated ${new Date().toLocaleTimeString()}`,
+      anyFailed && fetchedCount === 0 ? 'error' : 'success');
     startAutoRefresh();
     if (watchlist.length) fetchWatchlistPrices();
   }
