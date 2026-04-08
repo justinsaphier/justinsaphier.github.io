@@ -345,6 +345,9 @@ app.post('/api/send-alert', requireAuth, async (req, res) => {
   }
 });
 
+// ── Keep-alive ping (used by cron-job.org to prevent Render sleep) ───────────
+app.get('/api/ping', (req, res) => res.json({ ok: true, ts: Date.now() }));
+
 // ── Prices (public, no auth required) ────────────────────────────────────────
 
 app.get('/api/prices', async (req, res) => {
