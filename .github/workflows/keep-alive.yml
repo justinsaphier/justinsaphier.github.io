@@ -2,7 +2,7 @@ name: Keep Server Alive
 
 on:
   schedule:
-    - cron: '*/14 * * * *'  # Every 14 minutes, all day, every day
+    - cron: '*/14 * * * *'  # Every 14 minutes
 
 jobs:
   ping:
@@ -10,6 +10,6 @@ jobs:
     steps:
       - name: Ping server
         run: |
-          curl -s --max-time 30 \
+          curl -s --max-time 60 --retry 3 --retry-delay 10 \
             "https://justinsaphier-investment-tracker.onrender.com/api/ping" \
-            && echo " ✓ Server is alive"
+            && echo "✓ Server is alive" || echo "⚠ Ping timed out (server may be waking up)"

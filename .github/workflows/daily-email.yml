@@ -2,7 +2,7 @@ name: Daily Portfolio Email
 
 on:
   schedule:
-    - cron: '0 13 * * 1-5'  # 8:00 AM ET (13:00 UTC) Monday–Friday
+    - cron: '0 12 * * 1-5'  # 8:00 AM EDT (UTC-4) Monday–Friday
   workflow_dispatch:          # Allow manual trigger from GitHub UI
 
 jobs:
@@ -16,7 +16,7 @@ jobs:
             "https://justinsaphier-investment-tracker.onrender.com/api/cron-emails" \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json" \
-            --max-time 60)
+            --max-time 60 --retry 2 --retry-delay 15)
           BODY=$(echo "$RESPONSE" | head -n1)
           STATUS=$(echo "$RESPONSE" | tail -n1)
           echo "Status: $STATUS"
