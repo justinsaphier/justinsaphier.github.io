@@ -140,12 +140,14 @@ function fmt(n) {
 }
 
 function createTransporter() {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    throw new Error('Email is not configured. Add SMTP_USER and SMTP_PASS to your Render environment variables.');
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    throw new Error('Email is not configured. Add SMTP_HOST, SMTP_USER, and SMTP_PASS to your Render environment variables.');
   }
   return nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    host:   process.env.SMTP_HOST,
+    port:   parseInt(process.env.SMTP_PORT || '465'),
+    secure: process.env.SMTP_SECURE !== 'false',
+    auth:   { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
   });
 }
 
