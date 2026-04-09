@@ -2,7 +2,7 @@ require('dotenv').config();
 const express    = require('express');
 const cors       = require('cors');
 const cron       = require('node-cron');
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 // Stock prices fetched directly via Yahoo Finance HTTP API (no npm package needed)
 const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
@@ -139,22 +139,23 @@ function fmt(n) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function getResend() {
-  if (!process.env.RESEND_API_KEY) {
-    throw new Error('Email is not configured. Add RESEND_API_KEY to your Render environment variables.');
+function createTransporter() {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    throw new Error('Email is not configured. Add SMTP_HOST, SMTP_USER, and SMTP_PASS to your Render environment variables.');
   }
-  return new Resend(process.env.RESEND_API_KEY);
+  return nodemailer.createTransport({
+    host:   process.env.SMTP_HOST,
+    port:   parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth:   { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+  });
 }
 
 async function sendEmail(to, subject, html) {
-  const resend = getResend();
-  const { error } = await resend.emails.send({
-    from: 'Investment Tracker <onboarding@resend.dev>',
-    to,
-    subject,
-    html,
+  await createTransporter().sendMail({
+    from:    `"Investment Tracker" <${process.env.SMTP_USER}>`,
+    to, subject, html,
   });
-  if (error) throw new Error(error.message);
 }
 
 async function sendPortfolioEmail(email, investments) {
@@ -359,9 +360,11 @@ app.get('/api/ping', (req, res) => res.json({ ok: true, ts: Date.now() }));
 // ── Health check (shows which env vars are present) ───────────────────────────
 app.get('/api/health', (req, res) => res.json({
   mongodb:     !!process.env.MONGODB_URI,
-  resend:      process.env.RESEND_API_KEY ? 'SET' : 'NOT SET',
+  smtp_host:   process.env.SMTP_HOST  || 'NOT SET',
+  smtp_user:   process.env.SMTP_USER  ? process.env.SMTP_USER.replace(/(.{2}).*(@.*)/, '$1***$2') : 'NOT SET',
+  smtp_pass:   process.env.SMTP_PASS  ? 'SET (' + process.env.SMTP_PASS.length + ' chars)' : 'NOT SET',
   cron_secret: !!process.env.CRON_SECRET,
-  node_env:    process.env.NODE_ENV || 'not set',
+  node_env:    process.env.NODE_ENV   || 'not set',
 }));
 
 // ── GitHub Actions cron trigger for daily emails ──────────────────────────────
