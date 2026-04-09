@@ -2,7 +2,7 @@ require('dotenv').config();
 const express    = require('express');
 const cors       = require('cors');
 const cron       = require('node-cron');
-// Email sent via SendGrid HTTP API (no SMTP needed — works on Render free tier)
+const nodemailer = require('nodemailer');
 // Stock prices fetched directly via Yahoo Finance HTTP API (no npm package needed)
 const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
@@ -139,30 +139,21 @@ function fmt(n) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-async function sendEmail(to, subject, html) {
-  if (!process.env.SENDGRID_API_KEY) {
-    throw new Error('Email is not configured. Add SENDGRID_API_KEY to your Render environment variables.');
+function createTransporter() {
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    throw new Error('Email is not configured. Add SMTP_USER and SMTP_PASS to your Render environment variables.');
   }
-  if (!process.env.SMTP_USER) {
-    throw new Error('Email is not configured. Add SMTP_USER (your verified sender email) to your Render environment variables.');
-  }
-  const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.SENDGRID_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      personalizations: [{ to: [{ email: to }] }],
-      from: { email: process.env.SMTP_USER, name: 'Investment Tracker' },
-      subject,
-      content: [{ type: 'text/html', value: html }],
-    }),
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
   });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`SendGrid error ${res.status}: ${err}`);
-  }
+}
+
+async function sendEmail(to, subject, html) {
+  await createTransporter().sendMail({
+    from: `"Investment Tracker" <${process.env.SMTP_USER}>`,
+    to, subject, html,
+  });
 }
 
 async function sendPortfolioEmail(email, investments) {
@@ -366,11 +357,11 @@ app.get('/api/ping', (req, res) => res.json({ ok: true, ts: Date.now() }));
 
 // ── Health check (shows which env vars are present) ───────────────────────────
 app.get('/api/health', (req, res) => res.json({
-  mongodb:          !!process.env.MONGODB_URI,
-  sendgrid_api_key: process.env.SENDGRID_API_KEY ? 'SET' : 'NOT SET',
-  smtp_user:        process.env.SMTP_USER ? process.env.SMTP_USER.replace(/(.{2}).*(@.*)/, '$1***$2') : 'NOT SET',
-  cron_secret:      !!process.env.CRON_SECRET,
-  node_env:         process.env.NODE_ENV || 'not set',
+  mongodb:     !!process.env.MONGODB_URI,
+  smtp_user:   process.env.SMTP_USER ? process.env.SMTP_USER.replace(/(.{2}).*(@.*)/, '$1***$2') : 'NOT SET',
+  smtp_pass:   process.env.SMTP_PASS ? 'SET (' + process.env.SMTP_PASS.length + ' chars)' : 'NOT SET',
+  cron_secret: !!process.env.CRON_SECRET,
+  node_env:    process.env.NODE_ENV || 'not set',
 }));
 
 // ── GitHub Actions cron trigger for daily emails ──────────────────────────────
