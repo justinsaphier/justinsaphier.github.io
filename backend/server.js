@@ -359,6 +359,17 @@ app.post('/api/send-alert', requireAuth, async (req, res) => {
 // ── Keep-alive ping ───────────────────────────────────────────────────────────
 app.get('/api/ping', (req, res) => res.json({ ok: true, ts: Date.now() }));
 
+// ── Health check (shows which env vars are present) ───────────────────────────
+app.get('/api/health', (req, res) => res.json({
+  mongodb:   !!process.env.MONGODB_URI,
+  smtp_host: process.env.SMTP_HOST  || 'NOT SET',
+  smtp_user: process.env.SMTP_USER  ? process.env.SMTP_USER.replace(/(.{2}).*(@.*)/, '$1***$2') : 'NOT SET',
+  smtp_pass: process.env.SMTP_PASS  ? 'SET (' + process.env.SMTP_PASS.length + ' chars)' : 'NOT SET',
+  smtp_port: process.env.SMTP_PORT  || '587 (default)',
+  cron_secret: !!process.env.CRON_SECRET,
+  node_env:  process.env.NODE_ENV   || 'not set',
+}));
+
 // ── GitHub Actions cron trigger for daily emails ──────────────────────────────
 app.post('/api/cron-emails', async (req, res) => {
   const secret = req.headers['x-cron-secret'];
