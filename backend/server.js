@@ -2,7 +2,7 @@ require('dotenv').config();
 const express    = require('express');
 const cors       = require('cors');
 const cron       = require('node-cron');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 // Stock prices fetched directly via Yahoo Finance HTTP API (no npm package needed)
 const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
@@ -139,19 +139,22 @@ function fmt(n) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function createTransporter() {
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    throw new Error(
-      'Email is not configured. Add SMTP_HOST, SMTP_USER, and SMTP_PASS ' +
-      'to your .env file (or Render environment variables) to enable emails.'
-    );
+function getResend() {
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error('Email is not configured. Add RESEND_API_KEY to your Render environment variables.');
   }
-  return nodemailer.createTransport({
-    host:   process.env.SMTP_HOST,
-    port:   parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth:   { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+  return new Resend(process.env.RESEND_API_KEY);
+}
+
+async function sendEmail(to, subject, html) {
+  const resend = getResend();
+  const { error } = await resend.emails.send({
+    from: 'Investment Tracker <onboarding@resend.dev>',
+    to,
+    subject,
+    html,
   });
+  if (error) throw new Error(error.message);
 }
 
 async function sendPortfolioEmail(email, investments) {
@@ -250,12 +253,7 @@ async function sendPortfolioEmail(email, investments) {
   </p>
 </div></body></html>`;
 
-  await createTransporter().sendMail({
-    from:    `"Investment Tracker" <${process.env.SMTP_USER}>`,
-    to:      email,
-    subject: `📈 Portfolio Update — ${sign}$${fmt(gain)} (${sign}${gainPct.toFixed(2)}%) · ${today}`,
-    html,
-  });
+  await sendEmail(email, `📈 Portfolio Update — ${sign}$${fmt(gain)} (${sign}${gainPct.toFixed(2)}%) · ${today}`, html);
 
   console.log(`Email sent to ${email}`);
   return { totalValue, gain, gainPct };
@@ -333,11 +331,10 @@ app.post('/api/send-alert', requireAuth, async (req, res) => {
   try {
     const transporter = createTransporter();
     const sign = direction === 'above' ? '▲' : '▼';
-    await transporter.sendMail({
-      from:    `"Investment Tracker" <${process.env.SMTP_USER}>`,
-      to:      req.user.email,
-      subject: `🔔 Price Alert: ${ticker} ${sign} $${currentPrice.toFixed(2)}`,
-      html: `<div style="font-family:sans-serif;background:#0d0f1a;color:#e2e8f0;padding:32px;border-radius:12px;max-width:480px;margin:0 auto;">
+    await sendEmail(
+      req.user.email,
+      `🔔 Price Alert: ${ticker} ${sign} $${currentPrice.toFixed(2)}`,
+      `<div style="font-family:sans-serif;background:#0d0f1a;color:#e2e8f0;padding:32px;border-radius:12px;max-width:480px;margin:0 auto;">
         <h2 style="color:#60a5fa;margin-bottom:8px;">🔔 Price Alert Triggered</h2>
         <p style="font-size:1.1rem;margin-bottom:20px;">
           <strong style="color:#e2e8f0;">${ticker}</strong> has crossed your target price.
@@ -347,8 +344,8 @@ app.post('/api/send-alert', requireAuth, async (req, res) => {
           <tr><td style="padding:10px;color:#5a6380;">Your Target</td><td style="padding:10px;">$${targetPrice.toFixed(2)} (${direction})</td></tr>
         </table>
         <p style="margin-top:24px;font-size:11px;color:#5a6380;text-align:center;">Investment Tracker · Price Alert</p>
-      </div>`,
-    });
+      </div>`
+    );
     res.json({ ok: true });
   } catch (err) {
     console.error('Alert email error:', err.message);
@@ -361,13 +358,10 @@ app.get('/api/ping', (req, res) => res.json({ ok: true, ts: Date.now() }));
 
 // ── Health check (shows which env vars are present) ───────────────────────────
 app.get('/api/health', (req, res) => res.json({
-  mongodb:   !!process.env.MONGODB_URI,
-  smtp_host: process.env.SMTP_HOST  || 'NOT SET',
-  smtp_user: process.env.SMTP_USER  ? process.env.SMTP_USER.replace(/(.{2}).*(@.*)/, '$1***$2') : 'NOT SET',
-  smtp_pass: process.env.SMTP_PASS  ? 'SET (' + process.env.SMTP_PASS.length + ' chars)' : 'NOT SET',
-  smtp_port: process.env.SMTP_PORT  || '587 (default)',
+  mongodb:     !!process.env.MONGODB_URI,
+  resend:      process.env.RESEND_API_KEY ? 'SET' : 'NOT SET',
   cron_secret: !!process.env.CRON_SECRET,
-  node_env:  process.env.NODE_ENV   || 'not set',
+  node_env:    process.env.NODE_ENV || 'not set',
 }));
 
 // ── GitHub Actions cron trigger for daily emails ──────────────────────────────

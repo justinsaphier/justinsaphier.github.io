@@ -16,6 +16,7 @@
     "mongoose": "^8.23.0",
     "node-cron": "^3.0.3",
     "nodemailer": "^8.0.4",
+    "resend": "^6.10.0",
     "yahoo-finance2": "^3.14.0"
   }
 }
