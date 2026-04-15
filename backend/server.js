@@ -274,13 +274,19 @@ app.post('/api/register', async (req, res) => {
   const passwordHash = await bcrypt.hash(password, 12);
   await upsertUser(key, { passwordHash, investments: [], portfolioHistory: [], watchlist: [], createdAt: new Date() });
 
-  const token = jwt.sign({ email: key }, JWT_SECRET, { expiresIn: '30d' });
+  const token = jwt.sign({ email: key }, JWT_SECRET, { expiresIn: '90d' });
   res.json({ ok: true, token, email: key });
 });
 
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password are required.' });
+
+  // Ensure DB is connected — reconnect if needed
+  if (!useDB && process.env.MONGODB_URI) {
+    const reconnected = await connectDB();
+    if (reconnected) useDB = true;
+  }
 
   const key  = email.toLowerCase();
   const user = await getUser(key);
@@ -289,7 +295,7 @@ app.post('/api/login', async (req, res) => {
   const match = await bcrypt.compare(password, user.passwordHash);
   if (!match) return res.status(401).json({ error: 'Incorrect password.' });
 
-  const token = jwt.sign({ email: key }, JWT_SECRET, { expiresIn: '30d' });
+  const token = jwt.sign({ email: key }, JWT_SECRET, { expiresIn: '90d' });
   res.json({ ok: true, token, email: key });
 });
 
@@ -359,13 +365,21 @@ app.post('/api/send-alert', requireAuth, async (req, res) => {
 app.get('/api/ping', (req, res) => res.json({ ok: true, ts: Date.now() }));
 
 // ── Health check (shows which env vars are present) ───────────────────────────
-app.get('/api/health', (req, res) => res.json({
-  mongodb:     !!process.env.MONGODB_URI,
-  smtp_user:   process.env.SMTP_USER ? process.env.SMTP_USER.replace(/(.{2}).*(@.*)/, '$1***$2') : 'NOT SET',
-  smtp_pass:   process.env.SMTP_PASS ? 'SET (' + process.env.SMTP_PASS.length + ' chars)' : 'NOT SET',
-  cron_secret: !!process.env.CRON_SECRET,
-  node_env:    process.env.NODE_ENV || 'not set',
-}));
+app.get('/api/health', async (req, res) => {
+  // If useDB is false but URI is set, try reconnecting
+  if (!useDB && process.env.MONGODB_URI) {
+    const reconnected = await connectDB();
+    if (reconnected) useDB = true;
+  }
+  res.json({
+    mongodb_uri_set: !!process.env.MONGODB_URI,
+    mongodb_connected: useDB,
+    smtp_user:   process.env.SMTP_USER ? process.env.SMTP_USER.replace(/(.{2}).*(@.*)/, '$1***$2') : 'NOT SET',
+    smtp_pass:   process.env.SMTP_PASS ? 'SET (' + process.env.SMTP_PASS.length + ' chars)' : 'NOT SET',
+    cron_secret: !!process.env.CRON_SECRET,
+    node_env:    process.env.NODE_ENV || 'not set',
+  });
+});
 
 // ── GitHub Actions cron trigger for daily emails ──────────────────────────────
 app.post('/api/cron-emails', async (req, res) => {
