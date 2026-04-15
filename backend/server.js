@@ -381,11 +381,38 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
+// ── Admin: list users (protected by CRON_SECRET) ─────────────────────────────
+app.get('/api/admin/users', async (req, res) => {
+  const secret = req.headers['x-cron-secret'];
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  if (!useDB && process.env.MONGODB_URI) {
+    const reconnected = await connectDB();
+    if (reconnected) useDB = true;
+  }
+  const users = await getAllUsers();
+  res.json({
+    db_connected: useDB,
+    user_count: users.length,
+    users: users.map(u => ({
+      email: u.email,
+      investments: u.investments?.length || 0,
+      created: u.createdAt,
+    })),
+  });
+});
+
 // ── GitHub Actions cron trigger for daily emails ──────────────────────────────
 app.post('/api/cron-emails', async (req, res) => {
   const secret = req.headers['x-cron-secret'];
   if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
+  }
+  // Ensure DB connected before sending emails
+  if (!useDB && process.env.MONGODB_URI) {
+    const reconnected = await connectDB();
+    if (reconnected) useDB = true;
   }
   try {
     const users = await getAllUsers();
