@@ -920,8 +920,8 @@
         const serverCount = data.investments?.length || 0;
         const localCount  = investments.length || 0;
 
-        // If local has MORE holdings than server, push local up (first sync from this device)
-        if (localCount > serverCount) {
+        // Always auto-sync local to cloud on login if local has any holdings
+        if (localCount > 0 && localCount >= serverCount) {
           persist();
           // Still load any server watchlist/history if it has more
           if (data.portfolioHistory?.length) portfolioHistory = data.portfolioHistory;

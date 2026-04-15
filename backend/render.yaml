@@ -5,6 +5,7 @@ services:
     rootDir: backend
     buildCommand: npm install
     startCommand: node server.js
+    autoDeploy: true
     envVars:
       - key: PORT
         value: 10000
@@ -12,12 +13,10 @@ services:
         value: production
       - key: JWT_SECRET
         generateValue: true
-      - key: SMTP_HOST
-        sync: false
       - key: SMTP_PORT
-        value: 587
+        value: 465
       - key: SMTP_SECURE
-        value: false
+        value: true
       - key: SMTP_USER
         sync: false
       - key: SMTP_PASS
